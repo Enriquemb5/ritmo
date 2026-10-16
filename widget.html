@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ritmo · próximas 6 h</title>
+<link rel="manifest" href="widget.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icons/logo.svg">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+:root{--g1:#1F5BFF;--g2:#16B3C9;--f:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","Segoe UI",Roboto,Arial,sans-serif;color-scheme:dark}
+html,body{margin:0;height:100%}
+body{background:linear-gradient(150deg,var(--g1),var(--g2));color:#fff;font-family:var(--f);-webkit-font-smoothing:antialiased}
+.w{max-width:520px;margin:0 auto;padding:calc(18px + env(safe-area-inset-top,0px)) 18px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px;min-height:100%;box-sizing:border-box}
+header{display:flex;align-items:center;gap:10px}
+header b{font-size:20px;font-weight:800;letter-spacing:-.02em}
+header span{margin-left:auto;font-size:14px;opacity:.85;font-variant-numeric:tabular-nums}
+ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+li{display:grid;grid-template-columns:62px 10px minmax(0,1fr);align-items:center;gap:10px;background:rgba(255,255,255,.14);border-radius:16px;padding:12px 14px}
+li.now{background:rgba(255,255,255,.26)}
+li time{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+li i{width:10px;height:10px;border-radius:50%}
+li span{font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+li small{display:block;font-size:13px;font-weight:500;opacity:.8}
+.empty{font-size:18px;font-weight:600;opacity:.95;padding:20px 0}
+a{color:#fff;font-weight:600;font-size:15px;opacity:.9}
+footer{margin-top:auto;display:flex;justify-content:space-between;font-size:13px;opacity:.8}
+</style>
+</head>
+<body>
+<main class="w">
+  <header><svg width="28" height="28" viewBox="2 4 96 96" aria-hidden="true"><g fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"><path d="M52 64 L72.25 60 A28 28 0 1 0 20.61 51.82"/><path d="M52 64 L81 91"/><path d="M15 69 L25 79 L40 64"/><path d="M48 46 L58 28" stroke-width="7.65"/></g><circle cx="48" cy="46" r="6.3" fill="#fff"/></svg><b>Próximas 6 h</b><span id="clk"></span></header>
+  <ul id="list"><li><span>Cargando…</span></li></ul>
+  <footer><a href="./">Abrir Ritmo</a><span id="upd"></span></footer>
+</main>
+<script src="engine.js"></script>
+<script>
+const COL={clase:'#C9C8FF',trabajo:'#9EEBFF',estudio:'#BFE0FF',deporte:'#9BF0B0',trayecto:'#E5E5EA',comida:'#FFD08A',libre:'#FFF0A0',hobby:'#FFB3C4',rutina:'#E8D6BE',evento:'#E6C2FF',viaje:'#9FF5EC',sueno:'#D1D1D6',examen:'#FFB0AB',entrega:'#FFD08A',tarea:'#B4EBFF',recordatorio:'#E6C2FF'};
+const PER=h=>h>=6&&h<12?['#FF7A2F','#FFB52E']:h>=12&&h<18?['#1F5BFF','#16B3C9']:h>=18&&h<21.5?['#7A4DFF','#FF5E8A']:['#0B1E4D','#2A3F8F'];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let E=null,agenda=[];
+async function init(){
+  let c=null;try{c=JSON.parse(localStorage.getItem('ritmo-cfg')||'null');agenda=JSON.parse(localStorage.getItem('ritmo-notas')||'[]')}catch(e){}
+  if(!c){document.getElementById('list').innerHTML='<p class="empty">Abre Ritmo y completa el cuestionario para ver aquí tu día.</p>';return}
+  const cfg=normCfg(c);await loadCals();await loadCatalog(teamupId(cfg.teamup));E=Engine(cfg,agenda);draw();
+}
+function draw(){
+  const now=new Date(),td=sod(now),t=now.getHours()*60+now.getMinutes(),lim=t+360,h=now.getHours()+now.getMinutes()/60,[a,b]=PER(h);
+  document.documentElement.style.setProperty('--g1',a);document.documentElement.style.setProperty('--g2',b);
+  document.getElementById('clk').textContent=clock(t);
+  let it=[];
+  for(const [off,d] of [[-1440,addDays(td,-1)],[0,td],[1440,addDays(td,1)]]){const P=E.plan(d);P.b.forEach(x=>{if(x.cat!=='pausa')it.push({s:x.s+off,e:x.e+off,label:x.label,note:x.note,cat:x.cat})});it.push({s:P.sleep+off,e:P.sleep+off+30,label:'Dormir',cat:'sueno'})}
+  for(const n of agenda){if(!n.time||n.kind==='viaje'||n.done)continue;const off=Math.round((new Date(n.date.replace(/-/g,'/'))-td)/864e5)*1440;it.push({s:T(n.time)+off,e:T(n.time)+off+1,label:n.text,note:AGENDA_KINDS[n.kind],cat:n.kind})}
+  it=it.filter(x=>x.e>t&&x.s<lim).sort((x,y)=>x.s-y.s).slice(0,8);
+  document.getElementById('list').innerHTML=it.length?it.map(x=>`<li class="${x.s<=t?'now':''}"><time>${x.s<=t?'Ahora':clock(x.s)}</time><i style="background:${COL[x.cat]||'#fff'}"></i><span>${esc(x.label)}${x.note?`<small>${esc(x.note)}</small>`:''}</span></li>`).join(''):'<p class="empty">Nada más en las próximas 6 horas.</p>';
+  document.getElementById('upd').textContent='Actualizado '+clock(t);
+}
+init();setInterval(()=>E&&draw(),60000);document.addEventListener('visibilitychange',()=>{if(!document.hidden&&E)draw()});
+</script>
+</body>
+</html>

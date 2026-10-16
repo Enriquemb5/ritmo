@@ -28,7 +28,8 @@ const DEFAULT_CFG={
   events:[{id:'e1',label:'Reunión',dow:0,start:'12:45',end:'14:30',freq:'A',work:true},{id:'e2',label:'Reunión',dow:0,start:'13:30',end:'14:30',freq:'B',work:true}],
   meals:{lunch:'14:00',lunchMin:45,dinner:'21:00',dinnerMin:45},
   evStudy:{days:[0],min:90},
-  hobby:{on:true,label:'Guitarra',min:30},
+  hobbies:[{id:'h1',label:'Guitarra',min:30,days:[0,1,2,3,4,5,6]}],
+  source:'teamup',custom:[],customRange:{from:'',to:''},ics:[],icsSel:[],margin:10,timeColors:true,
   wind:30,
   series:{on:true,count:2,min:120,endBy:'22:30',label:'Series en pista',prefer:[0,2,1,3,4]},
   run:{on:true,dow:5,start:'12:00',min:90,label:'Carrera'},
@@ -51,20 +52,41 @@ const where=l=>!l?'':/^\d/.test(l)?`Aula ${l}`:l;
 const B=(s,e,cat,label,note='',extra={})=>({s,e,cat,label,note,...extra});
 
 /* ---------- motor ---------- */
-function Engine(cfg){
+/* migra configuraciones antiguas */
+function normCfg(c){
+  c={...JSON.parse(JSON.stringify(DEFAULT_CFG)),...c};
+  if(!Array.isArray(c.hobbies)){c.hobbies=c.hobby&&c.hobby.on!==false?[{id:'h1',label:c.hobby.label||'Hobby',min:c.hobby.min||30,days:[0,1,2,3,4,5,6]}]:[]}
+  delete c.hobby;
+  for(const k of ['custom','ics','icsSel'])if(!Array.isArray(c[k]))c[k]=[];
+  if(!c.source)c.source=teamupId(c.teamup)?'teamup':'propio';
+  if(c.margin==null)c.margin=10;
+  return c;
+}
+const AGENDA_KINDS={tarea:'Tarea',recordatorio:'Recordatorio',examen:'Examen',entrega:'Entrega',viaje:'Viaje'};
+function Engine(cfg,agenda=[]){
   const C=cfg;
+  const trips=(agenda||[]).filter(a=>a.kind==='viaje'&&a.date);
+  const tripOn=d=>{const k=ymd(d);return trips.find(t=>k>=t.date&&k<=(t.end||t.date))};
   const sel=new Set(C.subjects||[]);
   const parity=d=>C.parityA==null?'A':(isoWeek(d)%2===C.parityA?'A':'B');
   const rushy=t=>C.rush.some(([a,b])=>t>=T(a)&&t<T(b));
   const drive=dep=>rushy(dep)?C.commute.rush:C.commute.normal;
-  const usesTeamup=!!CAT_ID&&teamupId(C.teamup)===CAT_ID;
+  const usesTeamup=C.source!=='propio'&&!!CAT_ID&&teamupId(C.teamup)===CAT_ID;
+  const icsSel=new Set(C.icsSel||[]);
+  const ICS={};(C.ics||[]).forEach(e=>{if(icsSel.has(e[3]))(ICS[e[0]]=ICS[e[0]]||[]).push(e)});
   const inRange=d=>{const k=ymd(d);return k>=CAT_FIRST&&k<=CAT_LAST};
 
   function classes(d){
-    if(!usesTeamup)return[];
-    return (BYDAY[ymd(d)]||[]).filter(e=>sel.has(SUBJ[e[3]].key)).map(e=>{
-      const s=SUBJ[e[3]];return B(T(e[1].slice(0,2)+':'+e[1].slice(2)),T(e[2].slice(0,2)+':'+e[2].slice(2)),'clase',s.name,[where(CAT.L[e[4]]),e[5]].filter(Boolean).join(' · '),{short:shortName(s.name),fixed:true});
-    }).sort((a,b)=>a.s-b.s);
+    const out=[],k=ymd(d),i=dow(d);
+    if(usesTeamup)(BYDAY[k]||[]).filter(e=>sel.has(SUBJ[e[3]].key)).forEach(e=>{
+      const s=SUBJ[e[3]];out.push(B(T(e[1].slice(0,2)+':'+e[1].slice(2)),T(e[2].slice(0,2)+':'+e[2].slice(2)),'clase',s.name,[where(CAT.L[e[4]]),e[5]].filter(Boolean).join(' · '),{short:shortName(s.name),fixed:true}));
+    });
+    if(C.source==='propio'){
+      const r=C.customRange||{};
+      if((!r.from||k>=r.from)&&(!r.to||k<=r.to))for(const s of C.custom||[])for(const sl of s.slots||[])if(sl.dow===i&&sl.start&&sl.end)out.push(B(T(sl.start),T(sl.end),'clase',s.name,where(sl.loc||''),{short:shortName(s.name),fixed:true}));
+      for(const e of ICS[k]||[])out.push(B(T(e[1]),T(e[2]),'clase',e[3],where(e[4]||''),{short:shortName(e[3]),fixed:true}));
+    }
+    return out.sort((a,b)=>a.s-b.s);
   }
   function events(d){
     const p=parity(d),i=dow(d);
@@ -76,8 +98,9 @@ function Engine(cfg){
   /* hora de salida y de despertar */
   function morningOf(d){
     const i=dow(d),cls=classes(d),evs=events(d),out=goesOut(d,cls,evs);
-    if(i>=5)return{wake:T(C.wakeWe),out:false};
+    if(i>=5||tripOn(d))return{wake:T(C.wakeWe),out:false,trip:!!tripOn(d)};
     let wake=T(C.wakeWk);
+    const mg=Math.max(0,C.margin??10);
     if(!out)return{wake,out:false,cls,evs};
     const fixed=[...cls,...evs].sort((a,b)=>a.s-b.s);
     const first=fixed.length?fixed[0].s:Infinity;
@@ -85,10 +108,10 @@ function Engine(cfg){
     let warn='';
     const autoLeave=target=>{let dep=target-C.commute.normal;if(rushy(dep))dep=target-C.commute.rush;return dep};
     if(L==null){
-      const target=first<Infinity?first-5:(C.work.after[i]?T('15:00'):T('10:15'));
+      const target=first<Infinity?first-mg:(C.work.after[i]?T('15:00'):T('10:15'));
       L=autoLeave(target);
-    }else if(L+drive(L)+5>first){
-      const nl=autoLeave(first-5);warn=`Hoy sales a las ${clock(nl)} para llegar a ${fixed[0].label} a las ${clock(first)}${fixed[0].note?` (${fixed[0].note})`:''}.`;L=nl;
+    }else if(L+drive(L)+mg>first){
+      const nl=autoLeave(first-mg);warn=`Hoy sales a las ${clock(nl)} para llegar a ${fixed[0].label} a las ${clock(first)}${fixed[0].note?` (${fixed[0].note})`:''}.`;L=nl;
     }
     if(L-C.morning<wake){wake=L-C.morning}
     return{wake,out:true,leave:L,cls,evs,warn};
@@ -121,6 +144,13 @@ function Engine(cfg){
     let S=nextWake+1440-Math.round(C.sleepH*60);
     const blocks=[];
     let H; // llegada a casa
+    const trip=tripOn(d);
+    if(trip){
+      let t=M.wake;blocks.push(B(t,t+60,'rutina','Despertar y desayuno'));t+=60;
+      blocks.push(B(t,T('21:00'),'viaje',trip.title||'Viaje',trip.note||'Hoy no hay rutina: disfruta',{short:'Viaje'}));
+      {const z=new Date((trip.end||trip.date).replace(/-/g,'/'));warn.push(`Estás de viaje${trip.title?': '+trip.title:''}. La rutina se pausa hasta el ${z.getDate()} de ${['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][z.getMonth()]}.`)}
+      return evening(d,{blocks,H:T('21:00'),S,warn,weekend:true,home:true,trip:true});
+    }
     if(i>=5){
       // fin de semana
       let t=M.wake;blocks.push(B(t,t+60,'rutina','Despertar y desayuno sin prisa'));t+=60;
@@ -132,7 +162,7 @@ function Engine(cfg){
       return evening(d,{blocks,H,S,warn,weekend:true,home:true});
     }
     const cls=M.cls||classes(d),evs=M.evs||events(d);
-    if(usesTeamup&&inRange(d)&&!cls.length&&sel.size)warn.push('No tienes clases en TeamUp este día. Organiza la jornada como te venga mejor.');
+    if((usesTeamup&&inRange(d)&&sel.size||C.source==='propio'&&(C.custom.length||icsSel.size))&&!cls.length)warn.push('No tienes clases este día. Organiza la jornada como te venga mejor.');
     // solapes entre clases y eventos
     const fx=[...cls,...evs].sort((a,b)=>a.s-b.s);
     for(let a=0;a<fx.length;a++)for(let b=a+1;b<fx.length;b++)if(fx[b].s<fx[a].e&&fx[b].e>fx[a].s)warn.push(`Se solapan ${fx[a].label} y ${fx[b].label} (${clock(Math.max(fx[a].s,fx[b].s))}–${clock(Math.min(fx[a].e,fx[b].e))}).`);
@@ -210,14 +240,15 @@ function Engine(cfg){
       else if(g>=15)ev.push(B(t,din,'libre',!series&&!o.weekend&&g>=60&&i<5?'Tiempo libre o deporte':'Tiempo libre'));
       t=din}
     // cena, hueco, hobby, desconectar hasta dormir
-    let parts=[{cat:'comida',label:'Cena',d:dm,min:30},{cat:'hueco',d:0,min:0},...(C.hobby.on?[{cat:'hobby',label:C.hobby.label,d:C.hobby.min,min:15,drop:true}]:[]),{cat:'rutina',label:'Desconectar',note:'Sin pantallas, deja listo lo de mañana',d:C.wind,min:10}];
+    const hbs=o.trip?[]:(C.hobbies||[]).filter(h=>(h.days||[]).includes(i)&&h.min>0).map(h=>({cat:'hobby',label:h.label,d:h.min,min:Math.min(15,h.min),drop:true}));
+    let parts=[{cat:'comida',label:'Cena',d:dm,min:30},{cat:'hueco',d:0,min:0},...hbs,{cat:'rutina',label:'Desconectar',note:'Sin pantallas, deja listo lo de mañana',d:C.wind,min:10}];
     let avail=S-t,need=parts.reduce((a,p)=>a+p.d,0);
     if(avail>need){const gap=avail-need;
       if(wantStudy&&!studied&&gap>=60){parts.splice(1,0,{cat:'estudio',label:'Estudio',note:'Repasa lo que has dado hoy',d:Math.min(C.evStudy.min,gap-15)});}
       const n2=parts.reduce((a,p)=>a+p.d,0);parts.find(p=>p.cat==='hueco').d=Math.max(0,avail-n2)}
     else{let over=need-avail;
-      for(const c of ['rutina','comida','hobby']){const p=parts.find(x=>x.cat===c);if(!p||over<=0)continue;const cut=Math.min(over,p.d-p.min);p.d-=cut;over-=cut}
-      const hb=parts.find(p=>p.cat==='hobby');if(over>0&&hb){over-=hb.d;hb.d=0;warn.push(`Hoy acabas tarde y no da tiempo a ${C.hobby.label.toLowerCase()}.`)}
+      for(const p of [parts.find(x=>x.cat==='rutina'),parts.find(x=>x.cat==='comida'),...parts.filter(x=>x.cat==='hobby')]){if(!p||over<=0)continue;const cut=Math.min(over,p.d-p.min);p.d-=cut;over-=cut}
+      for(const hb of parts.filter(p=>p.cat==='hobby').reverse()){if(over<=0)break;over-=hb.d;hb.d=0;warn.push(`Hoy acabas tarde y no da tiempo a ${hb.label.toLowerCase()}.`)}
       if(over>0){S+=over;warn.push(`Hoy te acuestas a las ${clock(S)}.`)}}
     for(const p of parts){if(p.d<=0)continue;
       if(p.cat==='hueco'){if(p.d>=15)ev.push(B(t,t+p.d,'libre','Tiempo libre'));t+=p.d;continue}
@@ -232,7 +263,7 @@ function Engine(cfg){
     const k=ymd(mon);if(scache[k])return scache[k];
     const pick=[];
     if(C.series.on&&C.series.count>0){
-      const fits=i=>{if(i>=5)return false;const P=baseC(addDays(mon,i));return P.H+5+C.series.min<=T(C.series.endBy)};
+      const fits=i=>{if(i>=5||tripOn(addDays(mon,i)))return false;const P=baseC(addDays(mon,i));return P.H+5+C.series.min<=T(C.series.endBy)};
       const pref=(C.series.prefer||[0,1,2,3,4]).filter(i=>i<5);
       for(const pass of [0,1])for(const i of pref){if(pick.length>=C.series.count)break;if(pick.includes(i))continue;if(pass===0&&(pick.includes(i-1)||pick.includes(i+1)))continue;if(fits(i))pick.push(i)}
     }
@@ -248,12 +279,35 @@ function Engine(cfg){
       P=evening(d,{blocks:pre,H:P.H,S:nextWake+1440-Math.round(C.sleepH*60),warn:[...P.warn],series:true,home:P.home});
       P.series=true;
     }
-    P.date=d;P.parity=parity(d);P.src=usesTeamup&&inRange(d)?'teamup':'tipo';
+    P.date=d;P.parity=parity(d);P.src=usesTeamup&&inRange(d)?'teamup':C.source==='propio'?'propio':'tipo';P.trip=tripOn(d)||null;
     return cache[k]=P;
   }
   const wakeOf=d=>plan(d).b[0].s;
   const sleepDur=d=>wakeOf(addDays(d,1))+1440-plan(d).sleep;
   return{plan,wakeOf,sleepDur,seriesDays,parity,classes,usesTeamup};
+}
+
+/* lee un archivo .ics y devuelve [fecha, inicio, fin, título, lugar] (repite los RRULE semanales) */
+function parseICS(text,horizonDays=300){
+  const lines=text.replace(/\r\n[ \t]/g,'').replace(/\n[ \t]/g,'').split(/\r?\n/);
+  const out=[];let ev=null;
+  const un=s=>String(s||'').replace(/\\n/gi,' ').replace(/\\,/g,',').replace(/\\;/g,';').trim();
+  const dt=v=>{const m=String(v).match(/(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2}))?(Z)?/);if(!m)return null;
+    let d=new Date(+m[1],+m[2]-1,+m[3],+(m[4]||0),+(m[5]||0));if(m[6])d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+(m[4]||0),+(m[5]||0)));return{d,allDay:!m[4]}};
+  for(const raw of lines){
+    if(raw==='BEGIN:VEVENT'){ev={};continue}
+    if(raw==='END:VEVENT'){if(ev&&ev.s&&ev.e&&!ev.s.allDay){
+        const push=(s,e2)=>{const p=n=>String(n).padStart(2,'0');out.push([`${s.getFullYear()}-${p(s.getMonth()+1)}-${p(s.getDate())}`,`${p(s.getHours())}:${p(s.getMinutes())}`,`${p(e2.getHours())}:${p(e2.getMinutes())}`,ev.title||'Clase',ev.loc||''])};
+        const dur=ev.e.d-ev.s.d;push(ev.s.d,ev.e.d);
+        if(ev.rrule&&/FREQ=WEEKLY/.test(ev.rrule)){const until=(ev.rrule.match(/UNTIL=([0-9TZ]+)/)||[])[1];const cnt=+((ev.rrule.match(/COUNT=(\d+)/)||[])[1]||0);
+          const lim=until?dt(until).d:new Date(ev.s.d.getTime()+horizonDays*864e5);const ex=new Set(ev.ex||[]);
+          for(let n=1,t=new Date(ev.s.d);;n++){t=new Date(t.getFullYear(),t.getMonth(),t.getDate()+7,t.getHours(),t.getMinutes());if(t>lim||(cnt&&n>=cnt))break;if(!ex.has(t.toDateString()))push(t,new Date(t.getTime()+dur))}}
+      }ev=null;continue}
+    if(!ev)continue;
+    const i=raw.indexOf(':');if(i<0)continue;const key=raw.slice(0,i).split(';')[0].toUpperCase(),val=raw.slice(i+1);
+    if(key==='SUMMARY')ev.title=un(val);else if(key==='LOCATION')ev.loc=un(val);else if(key==='DTSTART')ev.s=dt(val);else if(key==='DTEND')ev.e=dt(val);else if(key==='RRULE')ev.rrule=val;else if(key==='EXDATE')(ev.ex=ev.ex||[]).push(...val.split(',').map(v=>{const x=dt(v);return x?x.d.toDateString():''}));
+  }
+  return out.sort((a,b)=>(a[0]+a[1]).localeCompare(b[0]+b[1]));
 }
 
 /* reparte bloques solapados en columnas (para pintarlos lado a lado) */

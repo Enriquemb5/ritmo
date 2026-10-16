@@ -1,6 +1,6 @@
 /* Ritmo: funciona sin conexión. La app se sirve desde caché; el calendario se pide primero a la red. */
-const V='ritmo-v1';
-const SHELL=['./','index.html','engine.js','app.js','config.js','manifest.webmanifest','icons/icon-192.png','icons/apple-touch-icon.png','data/calendars.json'];
+const V='ritmo-v2';
+const SHELL=['./','index.html','engine.js','app.js','config.js','manifest.webmanifest','icons/icon-192.png','icons/apple-touch-icon.png','data/calendars.json','widget.html','widget.webmanifest','icons/logo.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{

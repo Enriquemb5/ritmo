@@ -25,3 +25,7 @@ create policy "perfil propio" on public.perfiles for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "notas propias" on public.notas for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- v2: agenda con viajes (fecha de vuelta) y tareas hechas
+alter table public.notas add column if not exists "end" text default '';
+alter table public.notas add column if not exists done boolean default false;
