@@ -26,9 +26,9 @@ function logo(size=40,mode='grad'){const id='lg'+(++logoN);const C={x:48,y:46},R
 
 /* ---------- colores según la hora ---------- */
 const PAL={
-  man:{name:'Mañana',l:{g1:'#FF7A2F',g2:'#FFB52E',ac:'#D9600F',b1:'#FFD8BB',b2:'#FFE9AE'},d:{g1:'#FF8C4A',g2:'#FFC457',ac:'#FF9A50',b1:'#4A230E',b2:'#3D2E0A'}},
-  dia:{name:'Mediodía',l:{g1:'#1F5BFF',g2:'#16B3C9',ac:'#0A6CF0',b1:'#BCD3FF',b2:'#BDEFE3'},d:{g1:'#4C8DFF',g2:'#48D8E6',ac:'#3F8CFF',b1:'#0E2C63',b2:'#0B3A39'}},
-  tar:{name:'Atardecer',l:{g1:'#7A4DFF',g2:'#FF5E8A',ac:'#6A3CEB',b1:'#DCCEFF',b2:'#FFD2E0'},d:{g1:'#9C7BFF',g2:'#FF7FA3',ac:'#A184FF',b1:'#2A1A5E',b2:'#4A1730'}},
+  man:{name:'Mañana',l:{g1:'#FF7A2F',g2:'#FFB52E',ac:'#D9600F',b1:'#FBE3D0',b2:'#F7EDCF'},d:{g1:'#FF8C4A',g2:'#FFC457',ac:'#FF9A50',b1:'#4A230E',b2:'#3D2E0A'}},
+  dia:{name:'Mediodía',l:{g1:'#1F5BFF',g2:'#16B3C9',ac:'#0A6CF0',b1:'#D5E2FB',b2:'#D3EEEA'},d:{g1:'#4C8DFF',g2:'#48D8E6',ac:'#3F8CFF',b1:'#0E2C63',b2:'#0B3A39'}},
+  tar:{name:'Atardecer',l:{g1:'#4C5BD4',g2:'#E8833A',ac:'#4553C9',b1:'#DCE0F5',b2:'#F3E4D6'},d:{g1:'#7F8BF0',g2:'#F0A060',ac:'#8C97FF',b1:'#171D45',b2:'#2E2010'}},
   noc:{name:'Noche',l:{g1:'#1D3A8A',g2:'#5B7BE0',ac:'#2F4FC4',b1:'#C9D3F2',b2:'#D8DCF6'},d:{g1:'#5B7BE0',g2:'#9DB2FF',ac:'#7E9BFF',b1:'#0B1E4D',b2:'#1A2350'}}
 };
 const periodOf=d=>{const h=d.getHours()+d.getMinutes()/60;return h>=6&&h<12?'man':h>=12&&h<18?'dia':h>=18&&h<21.5?'tar':'noc'};
@@ -345,7 +345,7 @@ for(const [off,d] of [[-1440,R.addDays(td,-1)],[0,td],[1440,R.addDays(td,1)]]){c
 for(const a of AGENDA){if(!a.time||a.kind==='viaje'||a.done)continue;const d=new Date(a.date.replace(/-/g,'/'));const off=Math.round((d-td)/864e5)*1440;items.push({s:R.T(a.time)+off,e:R.T(a.time)+off+1,label:a.text,cat:a.kind,ag:true})}
 items=items.filter(b=>b.e>t&&b.s<lim).sort((a,b)=>a.s-b.s);
 const COL={clase:'#5E5CE6',trabajo:'#40C8E0',estudio:'#0A84FF',deporte:'#30D158',trayecto:'#98989D',comida:'#FF9F0A',libre:'#FFD60A',hobby:'#FF375F',rutina:'#AC8E68',evento:'#BF5AF2',viaje:'#00C7BE',sueno:'#8E8E93',examen:'#FF453A',entrega:'#FF9F0A',tarea:'#64D2FF',recordatorio:'#BF5AF2'};
-const h=now.getHours()+now.getMinutes()/60,per=h>=6&&h<12?['#FF7A2F','#FFB52E']:h>=12&&h<18?['#1F5BFF','#16B3C9']:h>=18&&h<21.5?['#7A4DFF','#FF5E8A']:['#0B1E4D','#2A3F8F'];
+const h=now.getHours()+now.getMinutes()/60,per=h>=6&&h<12?['#FF7A2F','#FFB52E']:h>=12&&h<18?['#1F5BFF','#16B3C9']:h>=18&&h<21.5?['#4C5BD4','#E8833A']:['#0B1E4D','#2A3F8F'];
 const w=new ListWidget();const g=new LinearGradient();g.colors=per.map(c=>new Color(c));g.locations=[0,1];g.startPoint=new Point(0,0);g.endPoint=new Point(1,1);w.backgroundGradient=g;w.setPadding(14,14,12,14);
 const top=w.addStack();const tt=top.addText('Ritmo');tt.font=Font.boldSystemFont(13);tt.textColor=Color.white();top.addSpacer();const sub=top.addText('próximas 6 h');sub.font=Font.mediumSystemFont(11);sub.textColor=new Color('#ffffff',.8);
 w.addSpacer(8);
