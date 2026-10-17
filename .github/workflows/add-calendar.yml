@@ -1,0 +1,57 @@
+name: Añadir calendario
+
+# Cuando alguien abre una issue con la plantilla «Añadir un calendario de TeamUp»,
+# se añade a data/calendars.json, se descargan sus clases y se cierra la issue.
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  add:
+    if: contains(github.event.issue.labels.*.name, 'calendario') || startsWith(github.event.issue.title, 'Calendario:')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - id: add
+        run: node scripts/add-calendar.mjs
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+      - id: sync
+        if: steps.add.outputs.status == 'added'
+        run: node scripts/sync-teamup.mjs "$ID"
+        env:
+          ID: ${{ steps.add.outputs.id }}
+        continue-on-error: true
+      - name: Guardar
+        if: steps.add.outputs.status == 'added' && steps.sync.outcome == 'success'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          git commit -m "Añade calendario $ID"
+          git push
+        env:
+          ID: ${{ steps.add.outputs.id }}
+      - name: Responder
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ github.event.issue.number }}
+          STATUS: ${{ steps.add.outputs.status }}
+          SYNC: ${{ steps.sync.outcome }}
+        run: |
+          if [ "$STATUS" = "added" ] && [ "$SYNC" = "success" ]; then
+            gh issue close "$N" --repo "$GITHUB_REPOSITORY" --comment "Listo: el calendario ya está en Ritmo y se sincroniza cada día. Vuelve a abrir la app (en 1–2 minutos) y elige tus asignaturas."
+          elif [ "$STATUS" = "exists" ]; then
+            gh issue close "$N" --repo "$GITHUB_REPOSITORY" --comment "Este calendario ya estaba en Ritmo. Abre la app y elige tus asignaturas."
+          elif [ "$STATUS" = "added" ]; then
+            gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "No he podido descargar las clases de este calendario. Comprueba que el enlace es público y que tiene clases este curso."
+          else
+            gh issue comment "$N" --repo "$GITHUB_REPOSITORY" --body "No encuentro un enlace de TeamUp válido (teamup.com/ks…). Edita la issue o abre otra."
+          fi

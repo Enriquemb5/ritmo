@@ -2,7 +2,8 @@
 // en el formato compacto que usa la app. Lo ejecuta cada día la acción "Sincronizar TeamUp".
 import fs from 'node:fs';
 
-const cals = JSON.parse(fs.readFileSync('data/calendars.json', 'utf8'));
+const only = process.argv[2]; // node scripts/sync-teamup.mjs ks… → solo ese calendario
+const cals = JSON.parse(fs.readFileSync('data/calendars.json', 'utf8')).filter(c => !only || c.id === only);
 const now = new Date();
 const y = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1; // curso de septiembre a julio
 const start = `${y}-09-01`, end = `${y + 1}-07-31`;

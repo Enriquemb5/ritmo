@@ -44,7 +44,7 @@ let E=null,agenda=[];
 async function init(){
   let c=null;try{c=JSON.parse(localStorage.getItem('ritmo-cfg')||'null');agenda=JSON.parse(localStorage.getItem('ritmo-notas')||'[]')}catch(e){}
   if(!c){document.getElementById('list').innerHTML='<p class="empty">Abre Ritmo y completa el cuestionario para ver aquí tu día.</p>';return}
-  const cfg=normCfg(c);await loadCals();await loadCatalog(teamupId(cfg.teamup));E=Engine(cfg,agenda);draw();
+  const cfg=normCfg(c);await Promise.all([loadCals(),loadHolidays()]);await loadCatalog(teamupId(cfg.teamup));E=Engine(cfg,agenda);draw();
 }
 function draw(){
   const now=new Date(),td=sod(now),t=now.getHours()*60+now.getMinutes(),lim=t+360,h=now.getHours()+now.getMinutes()/60,[a,b]=PER(h);

@@ -29,3 +29,6 @@ create policy "notas propias" on public.notas for all
 -- v2: agenda con viajes (fecha de vuelta) y tareas hechas
 alter table public.notas add column if not exists "end" text default '';
 alter table public.notas add column if not exists done boolean default false;
+
+-- v3: aviso de cada nota (minutos antes; vacío = sin aviso)
+alter table public.notas add column if not exists alert integer;

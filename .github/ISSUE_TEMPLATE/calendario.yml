@@ -1,0 +1,25 @@
+name: Añadir un calendario de TeamUp
+description: Para que Ritmo tenga las clases de tu grado. Se añade solo en unos minutos.
+title: "Calendario: "
+labels: ["calendario"]
+body:
+  - type: input
+    id: enlace
+    attributes:
+      label: Enlace de TeamUp
+      description: El enlace público del calendario de tu grado (teamup.com/ks…).
+      placeholder: https://teamup.com/ks…
+    validations:
+      required: true
+  - type: input
+    id: grado
+    attributes:
+      label: Grado
+      placeholder: Grado en Ingeniería Informática
+    validations:
+      required: true
+  - type: input
+    id: universidad
+    attributes:
+      label: Universidad
+      placeholder: UMA

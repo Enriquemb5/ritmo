@@ -3,7 +3,22 @@
    clases reales de TeamUp. Todo en minutos desde las 00:00 (puede pasar de 1440). */
 
 let CAT={S:[],L:[],E:[]},CAT_ID='',CAT_NAME='',CAT_SYNC='',COURSES=[],SUBJ=[],BYDAY={},CAT_FIRST='9999',CAT_LAST='0000',CALS=[];
-const CLABEL=c=>/^\d+$/.test(c)?c+'º':/^\d+B$/.test(c)?c.slice(0,-1)+'º · grupo B':c;
+const CLABEL=c=>/^\d+$/.test(c)?c+'º curso':/^\d+B$/.test(c)?c.slice(0,-1)+'º curso · grupo B':c==='?'||!c?'Otras':c;
+
+/* ---------- festivos (data/festivos.json: BOE por comunidad + locales conocidos) ---------- */
+let FEST=null;
+const CCAA=[['AN','Andalucía'],['AR','Aragón'],['AS','Asturias'],['IB','Illes Balears'],['CN','Canarias'],['CB','Cantabria'],['CM','Castilla-La Mancha'],['CL','Castilla y León'],['CT','Cataluña'],['EX','Extremadura'],['GA','Galicia'],['MD','Comunidad de Madrid'],['MC','Región de Murcia'],['NC','Navarra'],['PV','País Vasco'],['RI','La Rioja'],['VC','Comunitat Valenciana'],['CE','Ceuta'],['ML','Melilla']];
+const setHolidays=f=>{FEST=f};
+async function loadHolidays(){try{const r=await fetch('data/festivos.json',{cache:'no-cache'});if(r.ok)FEST=await r.json()}catch(e){}}
+const townKey=t=>String(t||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+const localOf=(ca,town)=>{if(!FEST||!town)return null;const e=Object.entries(FEST.local||{}).find(([k])=>{const [c,t]=k.split('|');return c===ca&&townKey(t)===townKey(town)});return e?e[1]:null};
+const knownTowns=ca=>Object.keys((FEST&&FEST.local)||{}).filter(k=>k.startsWith(ca+'|')).map(k=>k.split('|')[1]);
+function officialHoliday(k,ca,town){
+  if(!FEST)return null;const y=k.slice(0,4),md=k.slice(5,7)+k.slice(8,10),Y=FEST[y];
+  const find=(arr,scope)=>{for(const s of arr||[])if(s.slice(0,4)===md)return{name:s.slice(5),scope};return null};
+  if(Y){const r=find(Y.ES,'nacional')||find(Y[ca],'autonómico');if(r)return r}
+  const L=localOf(ca,town);return L?find(L[y],'local'):null;
+}
 function setCatalog(meta,cat){
   CAT=cat;CAT_ID=meta.id;CAT_NAME=meta.name;CAT_SYNC=cat.sync||'';
   SUBJ=CAT.S.map(([name,course],i)=>({i,name,course,key:course+'|'+name}));
@@ -26,7 +41,10 @@ const DEFAULT_CFG={
   leave:['08:40','09:30','09:30','09:30','auto'],
   work:{on:true,place:'uni',label:'Trabajo',min:[210,210,210,210,60],after:[false,false,false,false,true]},
   events:[{id:'e1',label:'Reunión',dow:0,start:'12:45',end:'14:30',freq:'A',work:true},{id:'e2',label:'Reunión',dow:0,start:'13:30',end:'14:30',freq:'B',work:true}],
-  meals:{lunch:'14:00',lunchMin:45,dinner:'21:00',dinnerMin:45},
+  meals:{lunch:'14:00',lunchLate:'15:00',lunchMin:45,dinner:'21:00',dinnerMin:45},
+  profile:'uni',
+  home:{ca:'AN',town:'Mijas'},place:{same:false,ca:'AN',town:'Málaga'},holidayWork:'libre',
+  opos:{name:'',temas:60,ritmo:3,primero:1,desde:'',study:[300,300,300,300,240,240,0],start:'08:30',block:50,rest:10,repaso:4,sim:{on:true,dow:5,start:'09:00',min:240}},
   evStudy:{days:[0],min:90},
   hobbies:[{id:'h1',label:'Guitarra',min:30,days:[0,1,2,3,4,5,6]}],
   source:'teamup',custom:[],customRange:{from:'',to:''},ics:[],icsSel:[],margin:10,timeColors:true,
@@ -60,13 +78,28 @@ function normCfg(c){
   for(const k of ['custom','ics','icsSel'])if(!Array.isArray(c[k]))c[k]=[];
   if(!c.source)c.source=teamupId(c.teamup)?'teamup':'propio';
   if(c.margin==null)c.margin=10;
+  c.meals={...DEFAULT_CFG.meals,...c.meals};c.opos={...DEFAULT_CFG.opos,...c.opos,sim:{...DEFAULT_CFG.opos.sim,...(c.opos||{}).sim}};
+  c.home={...DEFAULT_CFG.home,...c.home};c.place={...DEFAULT_CFG.place,...c.place};
   return c;
 }
-const AGENDA_KINDS={tarea:'Tarea',recordatorio:'Recordatorio',examen:'Examen',entrega:'Entrega',viaje:'Viaje'};
+const AGENDA_KINDS={tarea:'Tarea',recordatorio:'Recordatorio',examen:'Examen',entrega:'Entrega',viaje:'Viaje',festivo:'Festivo'};
+/* aviso por defecto de cada tipo (minutos antes; '' = sin aviso) */
+const ALERT_DEFAULT={tarea:'',recordatorio:0,examen:1440,entrega:1440,viaje:1440,festivo:''};
+const parseYmd=k=>{const [Y,M,D]=String(k).split('-').map(Number);return new Date(Y,M-1,D)};
 function Engine(cfg,agenda=[]){
   const C=cfg;
   const trips=(agenda||[]).filter(a=>a.kind==='viaje'&&a.date);
   const tripOn=d=>{const k=ymd(d);return trips.find(t=>k>=t.date&&k<=(t.end||t.date))};
+  /* festivos: los del sitio donde estudias o trabajas cambian el día; los de tu pueblo solo se muestran */
+  const place=C.place&&!C.place.same?C.place:(C.home||{});
+  const manual=(agenda||[]).filter(a=>a.kind==='festivo'&&a.date);
+  const hcache={};
+  const holidayOf=d=>{const k=ymd(d);if(k in hcache)return hcache[k];const m=manual.find(a=>k>=a.date&&k<=(a.end||a.date));
+    return hcache[k]=m?{name:m.text||'Festivo',scope:'manual'}:officialHoliday(k,place.ca,place.town)};
+  const homeHoliday=d=>{if(!C.place||C.place.same||!C.home)return null;return holidayOf(d)?null:officialHoliday(ymd(d),C.home.ca,C.home.town)};
+  const opos=C.profile==='opos';
+  /* festivo que libra el día entero (sin clase y, si así lo has dicho, sin trabajo ni reuniones) */
+  const offDay=d=>{const h=holidayOf(d);return h&&(!C.work.on||C.holidayWork!=='trabaja')?h:null};
   const sel=new Set(C.subjects||[]);
   const parity=d=>C.parityA==null?'A':(isoWeek(d)%2===C.parityA?'A':'B');
   const rushy=t=>C.rush.some(([a,b])=>t>=T(a)&&t<T(b));
@@ -78,6 +111,7 @@ function Engine(cfg,agenda=[]){
 
   function classes(d){
     const out=[],k=ymd(d),i=dow(d);
+    if(holidayOf(d))return out;
     if(usesTeamup)(BYDAY[k]||[]).filter(e=>sel.has(SUBJ[e[3]].key)).forEach(e=>{
       const s=SUBJ[e[3]];out.push(B(T(e[1].slice(0,2)+':'+e[1].slice(2)),T(e[2].slice(0,2)+':'+e[2].slice(2)),'clase',s.name,[where(CAT.L[e[4]]),e[5]].filter(Boolean).join(' · '),{short:shortName(s.name),fixed:true}));
     });
@@ -89,16 +123,16 @@ function Engine(cfg,agenda=[]){
     return out.sort((a,b)=>a.s-b.s);
   }
   function events(d){
-    const p=parity(d),i=dow(d);
-    return (C.events||[]).filter(ev=>ev.dow===i&&(ev.freq==='all'||ev.freq===p)).map(ev=>B(T(ev.start),T(ev.end),ev.work?'trabajo':'evento',ev.label,ev.freq==='all'?'':`Semana ${ev.freq}`,{short:ev.label,fixed:true,isEvent:true}));
+    const p=parity(d),i=dow(d);if(offDay(d))return[];
+    return (C.events||[]).filter(ev=>ev.dow===i&&(ev.freq==='all'||ev.freq===p)).map(ev=>B(T(ev.start),T(ev.end),ev.work?'trabajo':'evento',ev.label,ev.freq==='all'?'':`Semana ${ev.freq}`,{short:ev.label,fixed:true,isEvent:true,evId:ev.id}));
   }
-  const workMin=i=>C.work.on&&i<5?(C.work.min[i]||0):0;
-  const goesOut=(d,cls,evs)=>{const i=dow(d);return i<5&&(cls.length>0||(C.work.on&&C.work.place!=='casa'&&workMin(i)>0)||evs.length>0)};
+  const workMin=d=>{const i=dow(d);return C.work.on&&i<5&&!offDay(d)?(C.work.min[i]||0):0};
+  const goesOut=(d,cls,evs)=>{const i=dow(d);return (i<5||opos&&cls.length>0)&&(cls.length>0||(C.work.on&&C.work.place!=='casa'&&workMin(d)>0)||evs.length>0)};
 
   /* hora de salida y de despertar */
   function morningOf(d){
     const i=dow(d),cls=classes(d),evs=events(d),out=goesOut(d,cls,evs);
-    if(i>=5||tripOn(d))return{wake:T(C.wakeWe),out:false,trip:!!tripOn(d)};
+    if((i>=5&&!out)||tripOn(d)||(offDay(d)&&!opos))return{wake:T(C.wakeWe),out:false,trip:!!tripOn(d)};
     let wake=T(C.wakeWk);
     const mg=Math.max(0,C.margin??10);
     if(!out)return{wake,out:false,cls,evs};
@@ -123,18 +157,77 @@ function Engine(cfg,agenda=[]){
     for(const b of o){if(b.s>t)out.push([t,Math.min(b.s,to)]);t=Math.max(t,b.e);if(t>=to)break}
     if(t<to)out.push([t,to]);return out.filter(([a,z])=>z-a>=1);
   }
-  function fillWork(occ,need,from,to,label,maxRun=105){
+  /* si lo que queda cabe con media hora más de tirón, se termina sin pausa (2 h seguidas mejor que 1 h 45 + pausa + 15 min) */
+  function fillWork(occ,need,from,to,label,maxRun=105,cat='trabajo',pause=15){
     const out=[];let run=0;
     for(const [a,z] of freeSlots(occ,from,to)){
       let t=a;if(z-a<20){run=0;continue}
       while(need>0&&t<z){
-        if(run>=maxRun){const pe=Math.min(z,t+15);if(z-pe>=20)out.push(B(t,pe,'pausa','Pausa'));t=pe;run=0;continue}
-        const len=Math.min(need,z-t,maxRun-run);if(len<15&&need>len)break;
-        out.push(B(t,t+len,'trabajo',label));t+=len;need-=len;run+=len;
+        const room=need<=maxRun-run+30?need:maxRun-run;
+        if(room<=0){const pe=Math.min(z,t+pause);if(z-pe>=20)out.push(B(t,pe,'pausa','Pausa'));t=pe;run=0;continue}
+        const len=Math.min(need,z-t,room);if(len<15&&need>len)break;
+        out.push(B(t,t+len,cat,label));t+=len;need-=len;run+=len;
       }
       if(need<=0)break;run=0;
     }
     return{blocks:out,left:need};
+  }
+  /* mejor momento para comer: lo más cerca posible de tu hora (mejor un poco después que antes) y nunca más tarde del límite */
+  function pickLunch(occ,from,strict){
+    const at=T(C.meals.lunch),late0=Math.max(at,T(C.meals.lunchLate||clock(at+60))),d0=C.meals.lunchMin||45;
+    const pass=(early,late)=>{let best=null;
+      for(const [a,z] of freeSlots(occ,Math.max(from,at-early),late+d0)){
+        const dur=Math.min(d0,z-a);if(dur<Math.min(30,d0))continue;
+        const s=Math.min(Math.max(at,a),z-dur);if(s>late)continue;
+        const sc=s>=at?s-at:(at-s)*2;if(!best||sc<best.sc)best={s,dur,sc};
+      }return best};
+    // si a tu hora es imposible, se busca algo antes o un poco más tarde (y se avisa)
+    return pass(60,late0)||(strict?null:(r=>r&&{...r,odd:true})(pass(120,late0+60)));
+  }
+  /* temas de la oposición: rotan cada semana al ritmo que hayas puesto */
+  function temaOf(d){
+    const O=C.opos,i=dow(d);if(O.repaso===i)return{label:'Repaso',note:'Repasa los temas de la semana'};
+    const days=[0,1,2,3,4,5,6].filter(j=>(O.study[j]||0)>0&&j!==O.repaso&&!(O.sim&&O.sim.on&&O.sim.dow===j&&O.sim.min>=(O.study[j]||0)));
+    const k=days.indexOf(i);if(!O.temas||k<0)return{label:'Estudio',note:O.name||''};
+    const w=Math.max(0,Math.round((monday(d)-monday(O.desde?parseYmd(O.desde):d))/6048e5));
+    const n=Math.max(1,O.ritmo||1),a=Math.floor(k*n/days.length),b=Math.max(a,Math.floor((k+1)*n/days.length)-1);
+    const tm=x=>((O.primero-1+w*n+x)%O.temas+O.temas)%O.temas+1;
+    return{label:a===b?`Tema ${tm(a)}`:`Temas ${tm(a)}–${tm(b)}`,note:O.name||''};
+  }
+  /* semana de trabajo real (los festivos libres restan) frente a la normal */
+  function weekWork(d){const m=monday(d);let real=0,norm=0;for(let j=0;j<5;j++){const x=addDays(m,j);norm+=C.work.on?(C.work.min[j]||0):0;real+=workMin(x)}return{real,norm}}
+  function holidayNote(d,h){
+    if(!C.work.on||C.holidayWork!=='trabaja'){
+      const ww=weekWork(d);
+      return `Festivo: ${h.name}. Hoy no hay clase${C.work.on?' ni trabajo':''}${C.events.length&&C.work.on?' ni reuniones':''}.`+(C.work.on&&ww.real<ww.norm?` Esta semana trabajas ${hm(ww.real)} en lugar de ${hm(ww.norm)}.`:'');
+    }
+    return `Festivo: ${h.name}. No hay clase, pero trabajas como siempre.`;
+  }
+
+  /* día de quien prepara oposiciones: estudio por bloques, academia y simulacros */
+  function oposDay(d,M){
+    const i=dow(d),O=C.opos,warn=[],blocks=[],hol=holidayOf(d);
+    const nextWake=morningOf(addDays(d,1)).wake;const S=nextWake+1440-Math.round(C.sleepH*60);
+    if(hol)warn.push(`Festivo: ${hol.name}. ${C.custom.length?'No hay academia; ':''}hoy estudias lo de un sábado.`);
+    let t=M.wake;blocks.push(B(t,t+C.morning,'rutina',i>=5?'Despertar y desayuno sin prisa':'Despertar, ducha y desayuno'));t+=C.morning;
+    const cls=classes(d),evs=events(d),occ=[...cls,...evs];
+    // ida y vuelta a la academia (las sesiones seguidas cuentan como una)
+    const ses=[];for(const c of [...cls].sort((a,b)=>a.s-b.s)){const l=ses[ses.length-1];if(l&&c.s-l.e<60)l.e=Math.max(l.e,c.e);else ses.push({s:c.s,e:c.e})}
+    for(const s of ses){const g=drive(s.s-C.commute.normal),b=drive(s.e);occ.push(B(s.s-g-(C.margin||0),s.s,'trayecto','Ida a la academia',g===C.commute.rush?'Hora punta':'',{short:'Ida'}),B(s.e,s.e+b,'trayecto','Vuelta a casa','',{short:'Vuelta'}))}
+    let sim=null;
+    if(O.sim&&O.sim.on&&O.sim.dow===i){sim=B(T(O.sim.start),T(O.sim.start)+O.sim.min,'estudio','Simulacro','Como el examen real: con cronómetro y sin apuntes',{short:'Simulacro',fixed:true});occ.push(sim)}
+    const L=pickLunch(occ,t);let lunch=null;
+    if(L){lunch=B(L.s,L.s+L.dur,'comida','Comida',L.odd?'Hoy no cuadra a tu hora':'');occ.push(lunch)}
+    const W=workMin(d);
+    if(W>0){const r=fillWork(occ,W,t,T('20:30'),C.work.label);occ.push(...r.blocks);if(r.left>=10)warn.push(`Hoy te faltan ${hm(r.left)} de trabajo.`)}
+    let need=(hol&&i<5?O.study[5]:O.study[i])||0;if(sim)need-=sim.e-sim.s;
+    if(need>0){const tm=temaOf(d);const r=fillWork(occ,need,Math.max(t,T(O.start||'08:30')),T(C.meals.dinner),tm.label,O.block||50,'estudio',O.rest||10);
+      r.blocks.forEach(b=>{if(b.cat==='estudio')b.note=tm.note});occ.push(...r.blocks);
+      if(r.left>=15)warn.push(`Hoy no caben ${hm(r.left)} de estudio. Muévelos a otro día o empieza antes.`)}
+    const H=Math.max(t,lunch?lunch.e:0,...occ.map(b=>b.e));
+    for(const [a,z] of freeSlots(occ,t,H))if(z-a>=30)occ.push(B(a,z,'libre',z-a>=90?'Tiempo libre':'Descanso'));
+    blocks.push(...occ);
+    return evening(d,{blocks,H,S,warn,weekend:i>=5,home:true});
   }
 
   function base(d){
@@ -151,8 +244,11 @@ function Engine(cfg,agenda=[]){
       {const z=new Date((trip.end||trip.date).replace(/-/g,'/'));warn.push(`Estás de viaje${trip.title?': '+trip.title:''}. La rutina se pausa hasta el ${z.getDate()} de ${['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'][z.getMonth()]}.`)}
       return evening(d,{blocks,H:T('21:00'),S,warn,weekend:true,home:true,trip:true});
     }
-    if(i>=5){
-      // fin de semana
+    if(opos)return oposDay(d,M);
+    const hol=holidayOf(d);
+    if(hol&&i<5)warn.push(holidayNote(d,hol));
+    if(i>=5||offDay(d)){
+      // fin de semana o festivo
       let t=M.wake;blocks.push(B(t,t+60,'rutina','Despertar y desayuno sin prisa'));t+=60;
       if(C.weStudy.on){const s=Math.max(t,T(C.weStudy.start)),e=T(C.weStudy.end);if(s>t+15)blocks.push(B(t,s,'libre','Tiempo libre'));if(e-s>=30)blocks.push(B(s,e,'estudio','Estudio','Ejercicios y lo que vaya atrasado'));t=Math.max(t,e)}
       if(C.run.on&&C.run.dow===i){const s=Math.max(t,T(C.run.start));if(s-t>=15)blocks.push(B(t,s,'libre','Tiempo libre'));blocks.push(B(s,s+C.run.min,'deporte',C.run.label,'Incluye ir, calentar, estirar y ducha',{short:'Correr'}));t=s+C.run.min}
@@ -162,28 +258,37 @@ function Engine(cfg,agenda=[]){
       return evening(d,{blocks,H,S,warn,weekend:true,home:true});
     }
     const cls=M.cls||classes(d),evs=M.evs||events(d);
-    if((usesTeamup&&inRange(d)&&sel.size||C.source==='propio'&&(C.custom.length||icsSel.size))&&!cls.length)warn.push('No tienes clases este día. Organiza la jornada como te venga mejor.');
+    if(!hol&&(usesTeamup&&inRange(d)&&sel.size||C.source==='propio'&&(C.custom.length||icsSel.size))&&!cls.length)warn.push('No tienes clases este día. Organiza la jornada como te venga mejor.');
     // solapes entre clases y eventos
     const fx=[...cls,...evs].sort((a,b)=>a.s-b.s);
     for(let a=0;a<fx.length;a++)for(let b=a+1;b<fx.length;b++)if(fx[b].s<fx[a].e&&fx[b].e>fx[a].s)warn.push(`Se solapan ${fx[a].label} y ${fx[b].label} (${clock(Math.max(fx[a].s,fx[b].s))}–${clock(Math.min(fx[a].e,fx[b].e))}).`);
     if(M.warn)warn.push(M.warn);
     let t=M.wake;
     blocks.push(B(t,t+C.morning,'rutina','Despertar, ducha y desayuno'));t+=C.morning;
-    const W=workMin(i);
+    const W=workMin(d);
     if(!M.out){
       // día en casa
       let need=C.work.on&&C.work.place==='casa'?W:0;
-      const occ=[...fx];const lunch=T(C.meals.lunch);
-      if(need){const r=fillWork([...occ,B(lunch,lunch+C.meals.lunchMin,'x','')],need,t,T('20:00'),C.work.label);blocks.push(...r.blocks);occ.push(...r.blocks)}
-      blocks.push(B(lunch,lunch+C.meals.lunchMin,'comida','Comida'));occ.push(blocks[blocks.length-1]);
+      const occ=[...fx];
+      if(need){
+        // igual que en la uni: si el trabajo acaba a tiempo, se come después en vez de partirlo
+        const X=fillWork(occ,need,t,T('20:00'),C.work.label),LX=pickLunch([...occ,...X.blocks],t,true);
+        const LY=pickLunch(occ,t),Y=fillWork(LY?[...occ,B(LY.s,LY.s+LY.dur,'x','')]:occ,need,t,T('20:00'),C.work.label);
+        const [r,L]=LX&&X.left<=Y.left?[X,LX]:[Y,LY];blocks.push(...r.blocks);occ.push(...r.blocks);
+        if(L){const lb=B(L.s,L.s+L.dur,'comida','Comida');blocks.push(lb);occ.push(lb)}
+      }else{const L=pickLunch(occ,t);if(L){const lb=B(L.s,L.s+L.dur,'comida','Comida');blocks.push(lb);occ.push(lb)}}
+      const lunch=T(C.meals.lunch);
       for(const [a,z] of freeSlots(occ,t,T('18:30')))if(z-a>=30)blocks.push(B(a,z,a<lunch?'estudio':'libre',a<lunch?'Estudio':'Tiempo libre'));
       blocks.push(...fx);
-      return evening(d,{blocks,H:T('18:30'),S,warn,home:true});
+      return evening(d,{blocks,H:Math.max(T('18:30'),...occ.map(b=>b.e)),S,warn,home:true});
     }
-    // mañana en casa antes de salir
+    // mañana en casa antes de salir (si sales después de tu hora de comer, comes en casa)
     const L=M.leave;
-    if(C.work.on&&C.work.place==='casa'&&W>0&&L-15-t>=30){const r=fillWork([],Math.min(W,L-15-t),t,L-15,C.work.label);blocks.push(...r.blocks);t=r.blocks.length?r.blocks[r.blocks.length-1].e:t}
-    if(L-15-t>=20){blocks.push(B(t,L-15,'estudio','Estudio en casa'));blocks.push(B(L-15,L,'rutina','Prepararte y salir',C.work.place==='uni'&&W?'Tupper para comer allí':''))}
+    let homeLunch=null;
+    {const at=T(C.meals.lunch),lm=C.meals.lunchMin||45;if(L-15-lm>=at-45&&L-15-lm>=t){const s=Math.max(t,Math.min(at,L-15-lm));homeLunch=B(s,s+lm,'comida','Comida','En casa, antes de salir')}}
+    if(C.work.on&&C.work.place==='casa'&&W>0&&L-15-t>=30){const r=fillWork(homeLunch?[homeLunch]:[],Math.min(W,L-15-t),t,L-15,C.work.label);blocks.push(...r.blocks);t=r.blocks.length?r.blocks[r.blocks.length-1].e:t}
+    if(homeLunch){blocks.push(homeLunch);for(const [a,z] of freeSlots([homeLunch],t,L-15))if(z-a>=20)blocks.push(B(a,z,'estudio','Estudio en casa'));blocks.push(B(L-15,L,'rutina','Prepararte y salir'))}
+    else if(L-15-t>=20){blocks.push(B(t,L-15,'estudio','Estudio en casa'));blocks.push(B(L-15,L,'rutina','Prepararte y salir',C.work.place==='uni'&&W?'Tupper para comer allí':''))}
     else if(L>t)blocks.push(B(t,L,'rutina','Prepararte y salir'));
     const dur=drive(L);
     blocks.push(B(L,L+dur,'trayecto',C.work.place==='uni'&&W&&!C.work.after[i]?'Ida a la universidad':'Ida a clase',dur===C.commute.rush?'Hora punta':'',{short:'Coche'}));
@@ -199,13 +304,22 @@ function Engine(cfg,agenda=[]){
     if(need>0&&!C.work.after[i]&&meet){
       const s=Math.max(A,meet.s-need);const r=fillWork(occ,meet.s-s,s,meet.s,C.work.label,600);camp.push(...r.blocks);occ.push(...r.blocks);need-=(meet.s-s)-r.left;
     }
-    // comida
-    const lunchAt=T(C.meals.lunch);
-    const lslot=freeSlots(occ,lunchAt,T('17:00')).find(([a,z])=>z-a>=C.meals.lunchMin-10);
+    // comida y resto del trabajo
     let lunchB=null;
-    if(lslot&&lslot[0]<T('16:30')){const dd=Math.min(C.meals.lunchMin,lslot[1]-lslot[0]);lunchB=B(lslot[0],lslot[0]+dd,'comida','Comida',meet&&lslot[0]===meet.e?'Nada más salir de la reunión':'');camp.push(lunchB);occ.push(lunchB)}
-    else if(A<T('13:00'))warn.push('Hoy no hay hueco para comer tranquilo: lleva algo para picar entre clases.');
-    // resto del trabajo
+    const putLunch=(L,note)=>{if(!L)return;lunchB=B(L.s,L.s+L.dur,'comida','Comida',meet&&L.s===meet.e?'Nada más salir de la reunión':L.odd?'Hoy no cuadra a tu hora: come cuando puedas':note||'');camp.push(lunchB);occ.push(lunchB)};
+    if(homeLunch){}
+    else if(need>0&&!C.work.after[i]){
+      // dos opciones: trabajar del tirón y comer al acabar, o parar a comer a tu hora. Se queda con la primera si comes antes del límite.
+      const lim=fx.length?lastFix:A+need+60;
+      const X=fillWork(occ,need,A,lim,C.work.label),LX=pickLunch([...occ,...X.blocks],A,true);
+      const LY=pickLunch(occ,A),Y=fillWork(LY?[...occ,B(LY.s,LY.s+LY.dur,'x','')]:occ,need,A,lim,C.work.label);
+      const noSplit=!!LX&&X.left<=Y.left,r=noSplit?X:Y,L=noSplit?LX:LY;
+      camp.push(...r.blocks);occ.push(...r.blocks);
+      putLunch(L,noSplit&&r.blocks.some(b=>b.cat==='trabajo'&&b.e===L.s&&b.s<T(C.meals.lunch))?'Al terminar de trabajar, sin cortar la jornada':'');
+      if(r.left>=10)warn.push(`Hoy te faltan ${hm(r.left)} de trabajo: las clases no dejan hueco. Recupéralas otro día de esta semana.`);
+      need=0;
+    }else putLunch(pickLunch(occ,A));
+    if(!lunchB&&!homeLunch&&A<T('13:00'))warn.push('Hoy no hay hueco para comer tranquilo: lleva algo para picar entre clases.');
     if(need>0){
       let r;
       if(C.work.after[i]){
@@ -233,7 +347,7 @@ function Engine(cfg,agenda=[]){
     let t=H;const ev=[];
     if(series){ev.push(B(t+5,t+5+C.series.min,'deporte',C.series.label,'Ir, calentar, series, vuelta a la calma y volver',{short:'Series'}));t+=5+C.series.min}
     const din=T(C.meals.dinner),dm=C.meals.dinnerMin;
-    const wantStudy=i<5&&(C.evStudy.days||[]).includes(i);
+    const wantStudy=!opos&&!o.weekend&&i<5&&(C.evStudy.days||[]).includes(i);
     let studied=false;
     if(t<din){const g=din-t;
       if(wantStudy&&g>=45){const sd=Math.min(g,C.evStudy.min);if(g-sd>=15)ev.push(B(t,t+g-sd,'libre',!series&&!o.weekend&&g-sd>=60?'Tiempo libre o deporte':'Tiempo libre'));ev.push(B(din-sd,din,'estudio','Estudio','Repasa lo que has dado hoy'));studied=true}
@@ -263,7 +377,7 @@ function Engine(cfg,agenda=[]){
     const k=ymd(mon);if(scache[k])return scache[k];
     const pick=[];
     if(C.series.on&&C.series.count>0){
-      const fits=i=>{if(i>=5||tripOn(addDays(mon,i)))return false;const P=baseC(addDays(mon,i));return P.H+5+C.series.min<=T(C.series.endBy)};
+      const fits=i=>{if(i>=5||tripOn(addDays(mon,i))||opos&&!C.series.on)return false;const P=baseC(addDays(mon,i));return P.H+5+C.series.min<=T(C.series.endBy)};
       const pref=(C.series.prefer||[0,1,2,3,4]).filter(i=>i<5);
       for(const pass of [0,1])for(const i of pref){if(pick.length>=C.series.count)break;if(pick.includes(i))continue;if(pass===0&&(pick.includes(i-1)||pick.includes(i+1)))continue;if(fits(i))pick.push(i)}
     }
@@ -276,15 +390,15 @@ function Engine(cfg,agenda=[]){
       // rehace la tarde con series
       const pre=P.b.filter(b=>b.e<=P.H||(b.fixed&&b.s<P.H));
       const nextWake=morningOf(addDays(d,1)).wake;
-      P=evening(d,{blocks:pre,H:P.H,S:nextWake+1440-Math.round(C.sleepH*60),warn:[...P.warn],series:true,home:P.home});
+      P=evening(d,{blocks:pre,H:P.H,S:nextWake+1440-Math.round(C.sleepH*60),warn:[...P.warn],series:true,home:P.home,weekend:P.weekend});
       P.series=true;
     }
-    P.date=d;P.parity=parity(d);P.src=usesTeamup&&inRange(d)?'teamup':C.source==='propio'?'propio':'tipo';P.trip=tripOn(d)||null;
+    P.date=d;P.parity=parity(d);P.src=opos?'opos':usesTeamup&&inRange(d)?'teamup':C.source==='propio'?'propio':'tipo';P.trip=tripOn(d)||null;P.hol=holidayOf(d);P.holHome=homeHoliday(d);
     return cache[k]=P;
   }
   const wakeOf=d=>plan(d).b[0].s;
   const sleepDur=d=>wakeOf(addDays(d,1))+1440-plan(d).sleep;
-  return{plan,wakeOf,sleepDur,seriesDays,parity,classes,usesTeamup};
+  return{plan,wakeOf,sleepDur,seriesDays,parity,classes,usesTeamup,holidayOf,homeHoliday,weekWork,place};
 }
 
 /* lee un archivo .ics y devuelve [fecha, inicio, fin, título, lugar] (repite los RRULE semanales) */

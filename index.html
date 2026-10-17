@@ -21,7 +21,7 @@ html{height:100%}body{margin:0;min-height:100%}
 :root{
   --bg:#F2F2F7; --card:#FFFFFF; --glass:rgba(255,255,255,.74); --fg:#1C1C1E; --fg2:rgba(60,60,67,.62); --fg3:rgba(60,60,67,.32); --sep:rgba(60,60,67,.16); --fill:rgba(118,118,128,.12);
   --accent:#007AFF; --g1:#1F5BFF; --g2:#16B3C9; --blob1:#BCD3FF; --blob2:#BDEFE3; --dot:rgba(60,60,67,.10);
-  --c-clase:#5856D6; --c-trabajo:#30B0C7; --c-estudio:#007AFF; --c-deporte:#34C759; --c-trayecto:#8E8E93; --c-comida:#FF9500; --c-libre:#E5B800; --c-hobby:#FF2D55; --c-rutina:#A2845E; --c-pausa:#AEAEB2; --c-evento:#AF52DE; --c-sueno:#636366; --c-examen:#FF3B30; --c-entrega:#FF9500; --c-nota:#AF52DE; --c-tarea:#32ADE6; --c-recordatorio:#AF52DE; --c-viaje:#00B5A8; --now:#FF3B30;
+  --c-clase:#5856D6; --c-trabajo:#30B0C7; --c-estudio:#007AFF; --c-deporte:#34C759; --c-trayecto:#8E8E93; --c-comida:#FF9500; --c-libre:#E5B800; --c-hobby:#FF2D55; --c-rutina:#A2845E; --c-pausa:#AEAEB2; --c-evento:#AF52DE; --c-sueno:#636366; --c-examen:#FF3B30; --c-entrega:#FF9500; --c-nota:#AF52DE; --c-tarea:#32ADE6; --c-recordatorio:#AF52DE; --c-viaje:#00B5A8; --c-festivo:#C08A00; --now:#FF3B30;
   --f:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue","Segoe UI",Roboto,Arial,sans-serif;
   --fd:-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue","Segoe UI",Roboto,Arial,sans-serif;
   --fm:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
@@ -30,11 +30,11 @@ html{height:100%}body{margin:0;min-height:100%}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#000000; --card:#1C1C1E; --glass:rgba(28,28,30,.72); --fg:#F2F2F7; --fg2:rgba(235,235,245,.6); --fg3:rgba(235,235,245,.3); --sep:rgba(84,84,88,.55); --fill:rgba(118,118,128,.24);
   --accent:#0A84FF; --g1:#4C8DFF; --g2:#48D8E6; --blob1:#0E2C63; --blob2:#0B3A39; --dot:rgba(235,235,245,.08);
-  --c-clase:#5E5CE6; --c-trabajo:#40C8E0; --c-estudio:#0A84FF; --c-deporte:#30D158; --c-trayecto:#98989D; --c-comida:#FF9F0A; --c-libre:#FFD60A; --c-hobby:#FF375F; --c-rutina:#AC8E68; --c-pausa:#636366; --c-evento:#BF5AF2; --c-sueno:#8E8E93; --c-examen:#FF453A; --c-entrega:#FF9F0A; --c-nota:#BF5AF2; --c-tarea:#64D2FF; --c-recordatorio:#BF5AF2; --c-viaje:#00D4C4; --now:#FF453A; --mix:24%; --segon:#636366; color-scheme:dark}}
+  --c-clase:#5E5CE6; --c-trabajo:#40C8E0; --c-estudio:#0A84FF; --c-deporte:#30D158; --c-trayecto:#98989D; --c-comida:#FF9F0A; --c-libre:#FFD60A; --c-hobby:#FF375F; --c-rutina:#AC8E68; --c-pausa:#636366; --c-evento:#BF5AF2; --c-sueno:#8E8E93; --c-examen:#FF453A; --c-entrega:#FF9F0A; --c-nota:#BF5AF2; --c-tarea:#64D2FF; --c-recordatorio:#BF5AF2; --c-viaje:#00D4C4; --c-festivo:#E3B341; --now:#FF453A; --mix:24%; --segon:#636366; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#000000; --card:#1C1C1E; --glass:rgba(28,28,30,.72); --fg:#F2F2F7; --fg2:rgba(235,235,245,.6); --fg3:rgba(235,235,245,.3); --sep:rgba(84,84,88,.55); --fill:rgba(118,118,128,.24);
   --accent:#0A84FF; --g1:#4C8DFF; --g2:#48D8E6; --blob1:#0E2C63; --blob2:#0B3A39; --dot:rgba(235,235,245,.08);
-  --c-clase:#5E5CE6; --c-trabajo:#40C8E0; --c-estudio:#0A84FF; --c-deporte:#30D158; --c-trayecto:#98989D; --c-comida:#FF9F0A; --c-libre:#FFD60A; --c-hobby:#FF375F; --c-rutina:#AC8E68; --c-pausa:#636366; --c-evento:#BF5AF2; --c-sueno:#8E8E93; --c-examen:#FF453A; --c-entrega:#FF9F0A; --c-nota:#BF5AF2; --c-tarea:#64D2FF; --c-recordatorio:#BF5AF2; --c-viaje:#00D4C4; --now:#FF453A; --mix:24%; --segon:#636366; color-scheme:dark}
+  --c-clase:#5E5CE6; --c-trabajo:#40C8E0; --c-estudio:#0A84FF; --c-deporte:#30D158; --c-trayecto:#98989D; --c-comida:#FF9F0A; --c-libre:#FFD60A; --c-hobby:#FF375F; --c-rutina:#AC8E68; --c-pausa:#636366; --c-evento:#BF5AF2; --c-sueno:#8E8E93; --c-examen:#FF453A; --c-entrega:#FF9F0A; --c-nota:#BF5AF2; --c-tarea:#64D2FF; --c-recordatorio:#BF5AF2; --c-viaje:#00D4C4; --c-festivo:#E3B341; --now:#FF453A; --mix:24%; --segon:#636366; color-scheme:dark}
 
 html,body{background:var(--bg)}
 body{color:var(--fg);font-family:var(--f);font-size:16px;line-height:1.4;letter-spacing:-.01em;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
@@ -54,8 +54,8 @@ input,select{font:inherit;color:var(--fg)}
 [data-c="clase"]{--c:var(--c-clase)}[data-c="trabajo"]{--c:var(--c-trabajo)}[data-c="estudio"]{--c:var(--c-estudio)}[data-c="deporte"]{--c:var(--c-deporte)}
 [data-c="trayecto"]{--c:var(--c-trayecto)}[data-c="comida"]{--c:var(--c-comida)}[data-c="libre"]{--c:var(--c-libre)}[data-c="hobby"]{--c:var(--c-hobby)}
 [data-c="rutina"]{--c:var(--c-rutina)}[data-c="evento"]{--c:var(--c-evento)}[data-c="sueno"]{--c:var(--c-sueno)}
-[data-k]{--k:var(--c-nota)}[data-k="examen"]{--k:var(--c-examen)}[data-k="entrega"]{--k:var(--c-entrega)}[data-k="tarea"]{--k:var(--c-tarea)}[data-k="recordatorio"]{--k:var(--c-recordatorio)}[data-k="viaje"]{--k:var(--c-viaje)}
-[data-c="viaje"]{--c:var(--c-viaje)}
+[data-k]{--k:var(--c-nota)}[data-k="examen"]{--k:var(--c-examen)}[data-k="entrega"]{--k:var(--c-entrega)}[data-k="tarea"]{--k:var(--c-tarea)}[data-k="recordatorio"]{--k:var(--c-recordatorio)}[data-k="viaje"]{--k:var(--c-viaje)}[data-k="festivo"]{--k:var(--c-festivo)}
+[data-c="viaje"]{--c:var(--c-viaje)}[data-c="festivo"]{--c:var(--c-festivo)}
 
 /* tipografía tipo portada */
 .eyebrow{font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--fg2);margin:0}
@@ -105,6 +105,7 @@ input,select{font:inherit;color:var(--fg)}
 .row .lab small{display:block;color:var(--fg2);font-size:13px}
 .row input[type=text],.row input[type=url]{flex:1;min-width:0;border:0;background:none;padding:6px 0;font-size:17px}
 .row input::placeholder{color:var(--fg3)}
+.row input.tin{text-align:right}
 .row input[type=time]{border:0;background:var(--fill);border-radius:8px;padding:5px 8px;font-size:16px;font-variant-numeric:tabular-nums;min-width:0}
 .row select{border:0;background:var(--fill);border-radius:8px;padding:6px 8px;font-size:15px;max-width:55%}
 .row.link{width:100%;border:0;background:none;text-align:left}
@@ -328,6 +329,18 @@ body.wide .hero .display{font-size:clamp(30px,4vw,46px)}
 .mh .adbar,.mh .adc{text-transform:none;letter-spacing:0}
 .mh .adc{color:#fff;font-size:11px;font-weight:700}
 @media (max-height:500px) and (orientation:landscape){.mtop{grid-template-columns:minmax(240px,42%) minmax(0,1fr);align-items:start}.scr{gap:12px}.hero .display{font-size:28px}.now{padding:12px 14px}.now h2{font-size:22px}.tabs{bottom:6px}.fab{bottom:70px}}
+
+/* festivos, buscador, avisos */
+.pill.hol{background:color-mix(in oklab,var(--c-festivo) 16%,var(--card));color:color-mix(in oklab,var(--c-festivo) 75%,var(--fg))}
+.pill.hol .dot{background:var(--c-festivo)}
+.mh .hb{display:block;font-size:10px;font-weight:700;color:var(--c-festivo);text-transform:none;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.strip button.hol .dd{color:var(--c-festivo)}
+.search{width:100%;box-sizing:border-box;border:0;border-radius:12px;background:var(--fill);padding:10px 14px;font-size:16px}
+select.sel{border:0;background:var(--fill);border-radius:8px;padding:5px 8px;font-size:15px}
+.nrow .bell{display:block;font-size:12px;font-weight:500;color:var(--fg2)}
+.addcal{border:0;background:none;color:var(--accent);font-size:13px;padding:2px 4px}
+.pdfout{font-size:14px;color:var(--fg2)}
+#nKinds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px}
 </style>
 </head>
 <body>
@@ -336,12 +349,13 @@ body.wide .hero .display{font-size:clamp(30px,4vw,46px)}
 <div id="app"><div class="wrap splash"><div><svg width="56" height="56" viewBox="2 4 96 96" aria-hidden="true" style="margin-bottom:10px"><g fill="none" stroke="#1F5BFF" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"><path d="M52 64 L72.25 60 A28 28 0 1 0 20.61 51.82"/><path d="M52 64 L81 91"/><path d="M15 69 L25 79 L40 64"/><path d="M48 46 L58 28" stroke-width="7.65"/></g><circle cx="48" cy="46" r="6.3" fill="#1F5BFF"/></svg><p class="eyebrow">Ritmo</p><h1 class="display">Preparando<br><span class="grad">tu semana</span></h1><div class="spin" role="status" aria-label="Cargando"></div></div></div></div>
 <div class="sheet" id="sheet" hidden><div class="sheet-in" role="dialog" aria-modal="true" aria-labelledby="sheetT">
   <div class="grab"></div><h3 id="sheetT">Nuevo</h3>
-  <div class="seg wide" id="nKinds" role="group" aria-label="Tipo"><button data-v="tarea">Tarea</button><button data-v="recordatorio">Aviso</button><button data-v="examen">Examen</button><button data-v="entrega">Entrega</button><button data-v="viaje">Viaje</button></div>
+  <div class="seg wide" id="nKinds" role="group" aria-label="Tipo"><button data-v="tarea">Tarea</button><button data-v="recordatorio">Aviso</button><button data-v="examen">Examen</button><button data-v="entrega">Entrega</button><button data-v="viaje">Viaje</button><button data-v="festivo">Festivo</button></div>
   <div class="list">
     <div class="row"><input id="nText" type="text" maxlength="80" placeholder="Hacer la práctica 2" autocomplete="off" aria-label="Qué es"></div>
     <div class="row"><span class="lab">Día</span><input id="nDate" type="date" style="border:0;background:var(--fill);border-radius:8px;padding:5px 8px"></div>
-    <div class="row" id="nEndRow" hidden><span class="lab">Vuelta</span><input id="nEnd" type="date" style="border:0;background:var(--fill);border-radius:8px;padding:5px 8px"></div>
+    <div class="row" id="nEndRow" hidden><span class="lab" id="nEndLab">Vuelta</span><input id="nEnd" type="date" style="border:0;background:var(--fill);border-radius:8px;padding:5px 8px"></div>
     <div class="row" id="nTimeRow"><span class="lab">Hora <small>Opcional</small></span><input id="nTime" type="time"></div>
+    <div class="row" id="nAlertRow"><span class="lab">Avisarme</span><select id="nAlert" class="sel"><option value="">No</option><option value="0">A la hora</option><option value="60">1 h antes</option><option value="1440">1 día antes</option><option value="2880">2 días antes</option></select></div>
   </div>
   <p class="err" id="nErr" hidden></p>
   <button class="cta" id="nSave">Guardar</button>
@@ -358,6 +372,7 @@ body.wide .hero .display{font-size:clamp(30px,4vw,46px)}
 
 <script src="config.js"></script>
 <script src="engine.js"></script>
+<script src="tools.js"></script>
 <script src="app.js"></script>
 <script>if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));</script>
 </body>
