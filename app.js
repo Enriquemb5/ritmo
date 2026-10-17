@@ -172,11 +172,25 @@ const STEPS=[
      const open=n>0||(!anySel&&COURSES.length<=2);
      return`<details class="course"${open?' open':''}><summary>${esc(l)}<span class="n">${n?`${n} de ${list.length}`:list.length+' asignaturas'}</span></summary>${list.map(s=>`<button type="button" class="subj" role="checkbox" aria-checked="${sel.has(s.key)}" data-subj="${esc(s.key)}" data-q="${esc(townKey(s.name))}"><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="nm">${esc(s.name)}<small>${cnt[s.i]} ${cnt[s.i]>1?'sesiones':'sesión'}</small></span></button>`).join('')}</details>`}).join('');
    return`${head(pn('asig'),'Tus asignaturas','Busca las tuyas o abre tu curso. Puedes mezclar cursos y grupos.')}<input class="search" id="subjQ" type="search" placeholder="Buscar asignatura" autocomplete="off" aria-label="Buscar asignatura"><div id="subjL">${body}</div><p class="empty" id="subjNone" hidden>No hay ninguna asignatura con ese nombre.</p><p class="foot" style="margin:0 16px;color:var(--fg2);font-size:13px">${sel.size} seleccionadas. Si dos se cruzan, las verás una al lado de la otra.</p>`}},
- {id:'opos',when:isOpos,render:d=>{const O=d.opos,tot=O.study.reduce((a,b)=>a+b,0);const dsel=(p,v,none)=>`<select class="sel" data-bindn="${p}">${none?`<option value="-1"${v===-1?' selected':''}>Ninguno</option>`:''}${DN.map((n,k)=>`<option value="${k}"${k===v?' selected':''}>${n}</option>`).join('')}</select>`;
-   return`${head(pn('opos'),'Tu oposición','Reparto el temario por semanas y el estudio en bloques con descansos.')}
-   ${grp('Temario',row('Oposición',txt('opos.name',O.name,'Maestro, Policía, Enfermería…'))+row('Temas',stp('opos.temas',O.temas,1,400,1,''))+row('Temas por semana',stp('opos.ritmo',O.ritmo,1,40,1,''))+row('Empiezo por el tema',stp('opos.primero',O.primero,1,400,1,'')),'Cada bloque de estudio dice qué tema toca. Al acabar el temario vuelve a empezar.')}
-   ${grp('Horas de estudio',O.study.map((v,i)=>`<div class="daygrid"><span class="d">${DL[i]}</span>${stp('opos.study.'+i,v,0,720,30,'workh')}<span></span></div>`).join('')+row('Empiezo a las',tin('opos.start',O.start))+row('Bloques de',seg('opos.block',[[25,'25 min'],[50,'50 min'],[90,'90 min']],O.block))+row('Descanso entre bloques',stp('opos.rest',O.rest,5,30,5,'min')),`${hm(tot)} a la semana.`)}
-   ${grp('Repaso y simulacros',row('Día de repaso',dsel('opos.repaso',O.repaso,true))+row('Simulacro semanal',sw('opos.sim.on',O.sim.on))+(O.sim.on?row('Día',dsel('opos.sim.dow',O.sim.dow))+row('Hora',tin('opos.sim.start',O.sim.start))+row('Duración',stp('opos.sim.min',O.sim.min,30,360,30,'min')):''),'El simulacro cuenta como estudio de ese día.')}
+ {id:'opos',when:isOpos,render:d=>{const O=d.opos,P=OPOS_TIPOS[O.tipo]||OPOS_TIPOS.otra;
+   const dsel=(p,v,none)=>`<select class="sel" data-bindn="${p}">${none?`<option value="-1"${v===-1?' selected':''}>Ninguno</option>`:''}${DN.map((n,k)=>`<option value="${k}"${k===v?' selected':''}>${n}</option>`).join('')}</select>`;
+   const sesTot=(O.sessions||[]).reduce((a,x)=>a+Math.max(0,T(x.end||'0:00')-T(x.start||'0:00'))*(x.days||[]).length,0),blkTot=O.study.reduce((a,b)=>a+b,0);
+   const ses=(O.sessions||[]).map((x,i)=>`<div class="mtg"><input class="full" type="text" data-bind="opos.sessions.${i}.label" value="${esc(x.label)}" placeholder="Temario, test, callejero…" list="oposAreas" aria-label="Qué estudias">
+     <input type="time" data-bind="opos.sessions.${i}.start" value="${esc(x.start)}" aria-label="Empieza"><input type="time" data-bind="opos.sessions.${i}.end" value="${esc(x.end)}" aria-label="Termina">
+     <div class="full">${dayChips(`opos.sessions.${i}.days`,x.days)}</div>
+     <button type="button" class="del" data-delses="${i}">Quitar sesión</button></div>`).join('');
+   const tr=(O.train||[]).map((x,i)=>`<div class="mtg"><input class="full" type="text" data-bind="opos.train.${i}.label" value="${esc(x.label)}" placeholder="Natación, gimnasio, carrera…" aria-label="Entrenamiento">
+     <div class="full" style="display:flex;align-items:center;justify-content:space-between;gap:8px">${stp(`opos.train.${i}.min`,x.min,15,240,15,'min')}<input type="time" data-bind="opos.train.${i}.start" value="${esc(x.start||'')}" aria-label="Hora (opcional)" style="max-width:46%"></div>
+     <div class="full">${dayChips(`opos.train.${i}.days`,x.days)}</div>
+     <button type="button" class="del" data-deltr="${i}">Quitar entrenamiento</button></div>`).join('');
+   return`${head(pn('opos'),'Tu oposición','Monta tu día como estudias de verdad: tus horas, tus descansos y tus entrenos.')}
+   ${grp('Oposición',row('Tipo',`<select class="sel" data-bind="opos.tipo" aria-label="Tipo de oposición">${Object.entries(OPOS_TIPOS).map(([k,v])=>`<option value="${k}"${k===O.tipo?' selected':''}>${esc(v.n)}</option>`).join('')}</select>`)+row('Cuál',txt('opos.name',O.name,P.ph)),P.pruebas?`Pruebas físicas: ${esc(P.pruebas)} Comprueba siempre tu convocatoria.`:'')}
+   ${grp('Cómo estudias',`<div class="row">${seg('opos.mode',[['sesiones','A mi manera'],['bloques','Pomodoro']],O.mode,true)}</div>`,O.mode==='sesiones'?'Pon tus sesiones con su hora y lo que estudias en cada una. Entre sesión y sesión, descanso.':'Bloques cortos con descanso entre medias, hasta completar las horas de cada día.')}
+   ${O.mode==='sesiones'?grp('Sesiones de estudio',ses+`<button type="button" class="addrow" data-addses>+ Añadir sesión</button><datalist id="oposAreas">${[...P.areas,'Repaso','Simulacro'].map(x=>`<option value="${esc(x)}">`).join('')}</datalist>`,`${hm(sesTot)} a la semana. Las sesiones de «Temario» dicen qué tema toca.`)
+   :grp('Horas de estudio',O.study.map((v,i)=>`<div class="daygrid"><span class="d">${DL[i]}</span>${stp('opos.study.'+i,v,0,720,30,'workh')}<span></span></div>`).join('')+row('Empiezo a las',tin('opos.start',O.start))+row('Bloques de',seg('opos.block',[[25,'25 min'],[50,'50 min'],[90,'90 min']],O.block))+row('Descanso entre bloques',stp('opos.rest',O.rest,5,30,5,'min')),`${hm(blkTot)} a la semana.`)}
+   ${grp('Temario',row('Llevar la cuenta de los temas',sw('opos.temasOn',O.temasOn!==false))+(O.temasOn!==false?row('Temas',stp('opos.temas',O.temas,1,400,1,''))+row('Temas por semana',stp('opos.ritmo',O.ritmo,1,40,1,''))+row('Empiezo por el tema',stp('opos.primero',O.primero,1,400,1,'')):''),O.temasOn!==false?'Al acabar el temario vuelve a empezar. Si un tema te lleva más, cambia el tema de inicio en Ajustes.':'Tus sesiones de temario saldrán como «Temario», sin número.')}
+   ${grp('Entrenamiento físico',tr+`<button type="button" class="addrow" data-addtr>+ Añadir entrenamiento</button>`,(O.train||[]).length?'Sin hora, lo pongo en el primer hueco de la tarde, con la comida ya bajada y antes de cenar.':P.train?'Toca «+ Añadir entrenamiento» o vuelve a elegir el tipo para cargar los entrenos típicos.':'Si tu oposición tiene pruebas físicas, añade aquí tus entrenos.')}
+   ${grp('Repaso y simulacros',row('Día de repaso',dsel('opos.repaso',O.repaso,true))+row('Simulacro semanal',sw('opos.sim.on',O.sim.on))+(O.sim.on?row('Día',dsel('opos.sim.dow',O.sim.dow))+row('Hora',tin('opos.sim.start',O.sim.start))+row('Duración',stp('opos.sim.min',O.sim.min,30,360,30,'min')):''),'El día de repaso, el temario se dedica a repasar la semana. El simulacro manda sobre las sesiones de ese rato.')}
    ${customEditor(d,{h:'Academia o preparador',ph:'Academia, preparador…',add:'+ Añadir clase',loc:'Lugar',foot:'Clases fijas cada semana. Te pongo el trayecto de ida y vuelta.'})}`}},
  {id:'dia',render:d=>`${head(pn('dia'),'Tu día','Cuánto duermes, a qué hora te levantas y cuánto tardas en llegar.')}
    ${grp('Sueño',row('Horas de sueño',stp('sleepH',d.sleepH,5,10,.5,'h'))+row('Me levanto entre semana',tin('wakeWk',d.wakeWk))+row('Fin de semana',tin('wakeWe',d.wakeWe)))}
@@ -206,7 +220,7 @@ const STEPS=[
    ${grp('Comidas',row('Comida a partir de',tin('meals.lunch',d.meals.lunch))+row('Como muy tarde',tin('meals.lunchLate',d.meals.lunchLate))+row('Cena',tin('meals.dinner',d.meals.dinner)),'Si te queda poco trabajo, lo terminas del tirón y comes al acabar, sin pasar de la hora límite.')}`},
  {id:'listo',btn:'Crear mi rutina',render:d=>{const tot=d.work.on?d.work.min.reduce((a,b)=>a+b,0):0;const ns=d.source==='propio'?d.custom.length+d.icsSel.length:d.subjects.length;
    const p=d.place.same?d.home:d.place;
-   const first=isOpos(d)?`<li data-c="estudio"><span class="ic">${ICON.cal}</span><span><b>${esc(d.opos.name||'Tu oposición')}</b>${d.opos.temas} temas · ${d.opos.ritmo} por semana · ${hm(d.opos.study.reduce((a,b)=>a+b,0))} de estudio${d.custom.length?' · academia':''}</span></li>`
+   const first=isOpos(d)?`<li data-c="estudio"><span class="ic">${ICON.cal}</span><span><b>${esc(d.opos.name||'Tu oposición')}</b>${esc((OPOS_TIPOS[d.opos.tipo]||{}).n||'')}${d.opos.temasOn!==false?` · ${d.opos.ritmo} temas por semana`:''}${d.opos.train.length?` · ${d.opos.train.length} entrenos`:''}${d.custom.length?' · academia':''}</span></li>`
      :`<li data-c="clase"><span class="ic">${ICON.cal}</span><span><b>${ns} asignaturas</b>${d.source==='propio'?'Tu propio horario':known(d.teamup)?esc(CAT_NAME):'Sin calendario sincronizado'}</span></li>`;
    return`<section class="hero-ob">${logo(56)}${head('Todo listo',`Hola,<br><span class="grad">${esc(d.name||'tú')}</span>`,'Esto es lo que voy a tener en cuenta. Puedes cambiarlo cuando quieras en Ajustes.')}
    <ul class="feat">${first}
@@ -426,7 +440,7 @@ function viewAjustes(){
   const src=cfg.source==='propio'?`Propio · ${cfg.custom.length+cfg.icsSel.length} asignaturas`:known(cfg.teamup)?(calOf(cfg.teamup).short||CAT_NAME):cfg.teamup?'Sin sincronizar':'—';
   return`<header class="hero" style="padding-top:8px"><p class="eyebrow">${logo(18)}<span>Ritmo</span></p><h1 class="h2">Ajustes</h1></header>
    ${grp('Perfil',lk('Nombre',cfg.name,'nombre')+lk('Sobre ti',`${{uni:'Universidad',opos:'Oposiciones',otro:'Otro'}[cfg.profile]||'Universidad'}${cfg.home.town?' · '+cfg.home.town:''}`,'perfil'))}
-   ${cfg.profile==='opos'?grp('Oposición',lk('Temario y estudio',`${cfg.opos.name||'Oposición'} · ${cfg.opos.ritmo} temas/semana`,'opos')):grp('Clases',lk('Horario',src,'clases')+lk('Asignaturas',cfg.source==='propio'?`${cfg.custom.length+cfg.icsSel.length}`:`${cfg.subjects.length}`,'asig'))}
+   ${cfg.profile==='opos'?grp('Oposición',lk('Estudio y entrenos',`${cfg.opos.name||(OPOS_TIPOS[cfg.opos.tipo]||{}).n||'Oposición'}`,'opos')):grp('Clases',lk('Horario',src,'clases')+lk('Asignaturas',cfg.source==='propio'?`${cfg.custom.length+cfg.icsSel.length}`:`${cfg.subjects.length}`,'asig'))}
    ${grp('Rutina',lk('Tu día',`${String(cfg.sleepH).replace('.',',')} h de sueño · margen ${cfg.margin} min`,'dia')+lk('Trabajo',tot?hm(tot)+'/semana':'No','trabajo')+lk('Hábitos',[cfg.series.on?cfg.series.label:'',...cfg.hobbies.map(h=>h.label)].filter(Boolean).join(', ')||'—','habitos'))}
    ${festGroup()}
    ${alertsGroup()}
@@ -525,6 +539,8 @@ document.addEventListener('input',e=>{
   setP(ob.d,p,el.value);
   if(p==='teamup'){const st=$('#tuSt');if(st)st.innerHTML=tuStatus(el.value)}
   if(/\.(ca|town)$/.test(p)){const f=$('#festN');if(f)f.innerHTML=festNote(ob.d)}
+  if(p==='opos.tipo'){const O=ob.d.opos;if(!O.edited)O.sessions=oposSessions(O.tipo);if(!O.edited||!O.train.length)O.train=oposTrain(O.tipo);renderOB();return}
+  if(/^opos\.(sessions|train)\./.test(p))ob.d.opos.edited=true;
   const st=STEPS[ob.step];if(st.ok)$('#obNext').disabled=!st.ok(ob.d);
 });
 document.addEventListener('change',async e=>{
@@ -552,7 +568,7 @@ document.addEventListener('click',async e=>{
     if(t.dataset.ob==='back')return obBack();
     if(t.dataset.seg){const v=JSON.parse(t.dataset.v);setP(ob.d,t.dataset.seg,v);
       if(t.dataset.seg==='profile'&&v!=='uni'&&!(v==='otro'&&teamupId(ob.d.teamup)))ob.d.source='propio';
-      if(t.dataset.seg==='profile'&&v==='opos'&&!ob.edit&&!cfg){ob.d.work.on=false;ob.d.events=[];ob.d.series.on=false}
+      if(t.dataset.seg==='profile'&&v==='opos'&&!ob.edit&&!cfg){ob.d.work.on=false;ob.d.events=[];ob.d.series.on=false;ob.d.run.on=false}
       if(t.dataset.seg==='place.same'&&!v&&!ob.d.place.town)ob.d.place.ca=ob.d.home.ca;
       return renderOB()}
     if(t.dataset.stp){const p=t.dataset.stp,v=Number(getP(ob.d,p))+Number(t.dataset.d);setP(ob.d,p,Math.min(Number(t.dataset.max),Math.max(Number(t.dataset.min),Math.round(v*100)/100)));return renderOB()}
@@ -561,6 +577,10 @@ document.addEventListener('click',async e=>{
     if(t.dataset.days){const arr=getP(ob.d,t.dataset.days)||[],i=+t.dataset.i,s=new Set(arr);s.has(i)?s.delete(i):s.add(i);setP(ob.d,t.dataset.days,[...s].sort());return renderOB()}
     if(t.hasAttribute('data-addev')){ob.d.events.push({id:'e'+Date.now(),label:'Reunión',dow:0,start:'12:00',end:'13:00',freq:'all',work:true});return renderOB()}
     if(t.dataset.delev!==undefined){ob.d.events.splice(+t.dataset.delev,1);return renderOB()}
+    if(t.hasAttribute('data-addses')){const l=ob.d.opos.sessions.slice(-1)[0];ob.d.opos.sessions.push({id:'o'+Date.now(),label:'Temario',start:l?l.end:'09:00',end:l?clock(T(l.end)+120):'11:00',days:l?[...l.days]:[0,1,2,3,4]});ob.d.opos.edited=true;return renderOB()}
+    if(t.dataset.delses!==undefined){ob.d.opos.sessions.splice(+t.dataset.delses,1);ob.d.opos.edited=true;return renderOB()}
+    if(t.hasAttribute('data-addtr')){const P=OPOS_TIPOS[ob.d.opos.tipo]||{};const used=new Set(ob.d.opos.train.map(x=>x.label));const nx=(P.train||[]).find(x=>!used.has(x[0]));ob.d.opos.train.push({id:'t'+Date.now(),label:nx?nx[0]:'',min:nx?nx[1]:60,days:nx?nx[2]:[0,2,4],start:''});ob.d.opos.edited=true;return renderOB()}
+    if(t.dataset.deltr!==undefined){ob.d.opos.train.splice(+t.dataset.deltr,1);ob.d.opos.edited=true;return renderOB()}
     if(t.hasAttribute('data-addhob')){ob.d.hobbies.push({id:'h'+Date.now(),label:'',min:30,days:[0,1,2,3,4]});return renderOB()}
     if(t.dataset.delhob!==undefined){ob.d.hobbies.splice(+t.dataset.delhob,1);return renderOB()}
     if(t.hasAttribute('data-addsub')){ob.d.custom.push({id:'s'+Date.now(),name:'',slots:[{dow:0,start:'09:00',end:'11:00',loc:''}]});return renderOB()}

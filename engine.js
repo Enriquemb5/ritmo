@@ -44,7 +44,7 @@ const DEFAULT_CFG={
   meals:{lunch:'14:00',lunchLate:'15:00',lunchMin:45,dinner:'21:00',dinnerMin:45},
   profile:'uni',
   home:{ca:'AN',town:'Mijas'},place:{same:false,ca:'AN',town:'Málaga'},holidayWork:'libre',
-  opos:{name:'',temas:60,ritmo:3,primero:1,desde:'',study:[300,300,300,300,240,240,0],start:'08:30',block:50,rest:10,repaso:4,sim:{on:true,dow:5,start:'09:00',min:240}},
+  opos:{tipo:'otra',name:'',mode:'sesiones',sessions:null,train:[],temasOn:true,temas:60,ritmo:3,primero:1,desde:'',study:[300,300,300,300,240,240,0],start:'08:30',block:50,rest:10,repaso:4,sim:{on:true,dow:5,start:'10:00',min:240}},
   evStudy:{days:[0],min:90},
   hobbies:[{id:'h1',label:'Guitarra',min:30,days:[0,1,2,3,4,5,6]}],
   source:'teamup',custom:[],customRange:{from:'',to:''},ics:[],icsSel:[],margin:10,timeColors:true,
@@ -78,13 +78,42 @@ function normCfg(c){
   for(const k of ['custom','ics','icsSel'])if(!Array.isArray(c[k]))c[k]=[];
   if(!c.source)c.source=teamupId(c.teamup)?'teamup':'propio';
   if(c.margin==null)c.margin=10;
-  c.meals={...DEFAULT_CFG.meals,...c.meals};c.opos={...DEFAULT_CFG.opos,...c.opos,sim:{...DEFAULT_CFG.opos.sim,...(c.opos||{}).sim}};
+  c.meals={...DEFAULT_CFG.meals,...c.meals};
+  const oldOpos=c.opos&&!c.opos.mode;
+  c.opos={...DEFAULT_CFG.opos,...c.opos,sim:{...DEFAULT_CFG.opos.sim,...(c.opos||{}).sim}};
+  if(oldOpos)c.opos.mode='bloques'; // quien ya usaba bloques los mantiene
+  if(!Array.isArray(c.opos.sessions))c.opos.sessions=oposSessions(c.opos.tipo);
+  if(!Array.isArray(c.opos.train))c.opos.train=[];
   c.home={...DEFAULT_CFG.home,...c.home};c.place={...DEFAULT_CFG.place,...c.place};
   return c;
 }
 /* hobbies que son deporte: van antes de cenar, nunca con la cena en el estómago */
 const SPORTY=/correr|running|run\b|carrera|trotar|gym|gimnasio|pesas|bici|ciclismo|spinning|nadar|nataci|piscina|f[uú]tbol|baloncesto|basket|p[aá]del|tenis|crossfit|yoga|pilates|entren|deporte|boxeo|escalada|surf|rugby|voley|v[oó]ley|patinar|senderismo|caminar|andar\b/i;
 const hobbyWhen=h=>h.when||(SPORTY.test(h.label||'')?'tarde':'noche');
+/* tipos de oposición: cómo se suele repartir el estudio y qué pruebas físicas hay (orientativo: manda la convocatoria) */
+const OPOS_TIPOS={
+  bomberos:{n:'Bomberos',ph:'Bombero del Ayuntamiento de Málaga',pruebas:'Suelen pedir natación, trepa de cuerda, press banca, velocidad y un circuito de obstáculos, y en muchas también dominadas o carrera de fondo.',
+    areas:['Temario','Callejero','Test','Supuestos prácticos'],first:['Callejero',30],train:[['Natación',60,[0,2,4]],['Gimnasio: press banca, dominadas y trepa',75,[1,3]],['Carrera y velocidad',60,[5]]]},
+  policia_nacional:{n:'Policía Nacional',ph:'Escala básica',pruebas:'Circuito de agilidad, dominadas (hombres) o suspensión en barra (mujeres) y 1.000 m.',
+    areas:['Temario','Test','Ortografía','Psicotécnicos'],train:[['Dominadas y fuerza',60,[0,2,4]],['Carrera: 1.000 m y series',60,[1,3]],['Circuito de agilidad',45,[5]]]},
+  policia_local:{n:'Policía Local',ph:'Policía Local de Málaga',pruebas:'En Andalucía: 50 m, dominadas (hombres) o lanzamiento de balón (mujeres), flexibilidad, salto vertical y 1.000 m. Algunos ayuntamientos añaden 25 m de natación.',
+    areas:['Temario','Test','Psicotécnicos'],train:[['Dominadas y fuerza',60,[0,2,4]],['Carrera: 1.000 m y 50 m',60,[1,3]],['Salto vertical y flexibilidad',45,[5]]]},
+  guardia_civil:{n:'Guardia Civil',ph:'Cabos y guardias',pruebas:'Circuito de agilidad, 2.000 m, flexiones y 50 m de natación.',
+    areas:['Temario','Ortografía y gramática','Inglés','Psicotécnicos'],train:[['Carrera 2.000 m',60,[0,3]],['Natación 50 m',45,[1,4]],['Flexiones y circuito de agilidad',45,[2,5]]]},
+  docente:{n:'Magisterio y profesorado',ph:'Maestro de Educación Primaria',pruebas:'',areas:['Temario','Programación didáctica','Supuesto práctico','Unidades didácticas']},
+  administracion:{n:'Administración (AGE, Junta, ayuntamientos)',ph:'Auxiliar administrativo',pruebas:'',areas:['Temario','Test','Supuesto práctico']},
+  sanidad:{n:'Sanidad',ph:'Enfermería SAS',pruebas:'',areas:['Temario','Test','Casos clínicos']},
+  justicia:{n:'Justicia',ph:'Tramitación procesal',pruebas:'',areas:['Temario','Test','Supuesto práctico']},
+  otra:{n:'Otra',ph:'Tu oposición',pruebas:'',areas:['Temario','Test','Repaso']}
+};
+let sesN=0;
+function oposSessions(tipo){
+  const P=OPOS_TIPOS[tipo]||OPOS_TIPOS.otra,a=P.areas,wk=[0,1,2,3,4],id=()=>'o'+(++sesN)+Date.now().toString(36);
+  const m=P.first?[{id:id(),label:P.first[0],start:'08:15',end:clock(T('08:15')+P.first[1]),days:wk},{id:id(),label:'Temario',start:clock(T('08:15')+P.first[1]),end:'11:00',days:wk}]
+    :[{id:id(),label:'Temario',start:'08:30',end:'11:00',days:wk}];
+  return[...m,{id:id(),label:'Temario',start:'11:20',end:'14:00',days:wk},{id:id(),label:a.includes('Test')?'Test':a[1]||'Repaso',start:'16:30',end:'19:00',days:wk},{id:id(),label:'Repaso',start:'09:30',end:'13:00',days:[5]}];
+}
+const oposTrain=tipo=>((OPOS_TIPOS[tipo]||{}).train||[]).map(([label,min,days],k)=>({id:'t'+k+Date.now().toString(36),label,min,days,start:''}));
 const AGENDA_KINDS={tarea:'Tarea',recordatorio:'Recordatorio',examen:'Examen',entrega:'Entrega',viaje:'Viaje',festivo:'Festivo'};
 /* aviso por defecto de cada tipo (minutos antes; '' = sin aviso) */
 const ALERT_DEFAULT={tarea:'',recordatorio:0,examen:1440,entrega:1440,viaje:1440,festivo:''};
@@ -190,7 +219,8 @@ function Engine(cfg,agenda=[]){
   /* temas de la oposición: rotan cada semana al ritmo que hayas puesto */
   function temaOf(d){
     const O=C.opos,i=dow(d);if(O.repaso===i)return{label:'Repaso',note:'Repasa los temas de la semana'};
-    const days=[0,1,2,3,4,5,6].filter(j=>(O.study[j]||0)>0&&j!==O.repaso&&!(O.sim&&O.sim.on&&O.sim.dow===j&&O.sim.min>=(O.study[j]||0)));
+    const days=O.mode==='sesiones'?[0,1,2,3,4,5,6].filter(j=>j!==O.repaso&&(O.sessions||[]).some(s=>/^temario$/i.test(s.label||'Temario')&&(s.days||[]).includes(j)))
+      :[0,1,2,3,4,5,6].filter(j=>(O.study[j]||0)>0&&j!==O.repaso&&!(O.sim&&O.sim.on&&O.sim.dow===j&&O.sim.min>=(O.study[j]||0)));
     const k=days.indexOf(i);if(!O.temas||k<0)return{label:'Estudio',note:O.name||''};
     const w=Math.max(0,Math.round((monday(d)-monday(O.desde?parseYmd(O.desde):d))/6048e5));
     const n=Math.max(1,O.ritmo||1),a=Math.floor(k*n/days.length),b=Math.max(a,Math.floor((k+1)*n/days.length)-1);
@@ -211,24 +241,40 @@ function Engine(cfg,agenda=[]){
   function oposDay(d,M){
     const i=dow(d),O=C.opos,warn=[],blocks=[],hol=holidayOf(d);
     const nextWake=morningOf(addDays(d,1)).wake;const S=nextWake+1440-Math.round(C.sleepH*60);
-    if(hol)warn.push(`Festivo: ${hol.name}. ${C.custom.length?'No hay academia; ':''}hoy estudias lo de un sábado.`);
+    if(hol)warn.push(`Festivo: ${hol.name}. ${C.custom.length?'No hay academia y hoy':'Hoy'} estudias como un sábado.`);
     let t=M.wake;blocks.push(B(t,t+C.morning,'rutina',i>=5?'Despertar y desayuno sin prisa':'Despertar, ducha y desayuno'));t+=C.morning;
     const cls=classes(d),evs=events(d),occ=[...cls,...evs];
     // ida y vuelta a la academia (las sesiones seguidas cuentan como una)
     const ses=[];for(const c of [...cls].sort((a,b)=>a.s-b.s)){const l=ses[ses.length-1];if(l&&c.s-l.e<60)l.e=Math.max(l.e,c.e);else ses.push({s:c.s,e:c.e})}
     for(const s of ses){const g=drive(s.s-C.commute.normal),b=drive(s.e);occ.push(B(s.s-g-(C.margin||0),s.s,'trayecto','Ida a la academia',g===C.commute.rush?'Hora punta':'',{short:'Ida'}),B(s.e,s.e+b,'trayecto','Vuelta a casa','',{short:'Vuelta'}))}
     let sim=null;
-    if(O.sim&&O.sim.on&&O.sim.dow===i){sim=B(T(O.sim.start),T(O.sim.start)+O.sim.min,'estudio','Simulacro','Como el examen real: con cronómetro y sin apuntes',{short:'Simulacro',fixed:true});occ.push(sim)}
+    if(O.sim&&O.sim.on&&O.sim.dow===i){const ss=Math.max(T(O.sim.start),t);sim=B(ss,ss+O.sim.min,'estudio','Simulacro','Como el examen real: con cronómetro y sin apuntes',{short:'Simulacro',fixed:true});occ.push(sim)}
+    const sesMode=O.mode==='sesiones';
+    // sesiones fijas, como las hace cada uno (la academia y el simulacro mandan si se cruzan)
+    if(sesMode){const di=hol&&i<5?5:i,tm=temaOf(d);
+      for(const s of (O.sessions||[]).filter(s=>(s.days||[]).includes(di)&&s.start&&s.end&&T(s.end)>T(s.start)).sort((a,b)=>T(a.start)-T(b.start))){
+        const tem=O.temasOn!==false&&/^temario$/i.test(s.label||'Temario');
+        for(const [a,z] of freeSlots(occ,Math.max(T(s.start),t),T(s.end)))if(z-a>=15)occ.push(B(a,z,'estudio',tem?tm.label:(s.label||'Estudio'),tem?[s.label||'Temario',O.name].filter(Boolean).join(' · '):O.name||'',{short:tem?tm.label:s.label}));
+      }}
     const L=pickLunch(occ,t);let lunch=null;
     if(L){lunch=B(L.s,L.s+L.dur,'comida','Comida',L.odd?'Hoy no cuadra a tu hora':'');occ.push(lunch)}
     const W=workMin(d);
     if(W>0){const r=fillWork(occ,W,t,T('20:30'),C.work.label);occ.push(...r.blocks);if(r.left>=10)warn.push(`Hoy te faltan ${hm(r.left)} de trabajo.`)}
-    let need=(hol&&i<5?O.study[5]:O.study[i])||0;if(sim)need-=sim.e-sim.s;
+    let need=sesMode?0:(hol&&i<5?O.study[5]:O.study[i])||0;if(sim)need-=sim.e-sim.s;
     if(need>0){const tm=temaOf(d);const r=fillWork(occ,need,Math.max(t,T(O.start||'08:30')),T(C.meals.dinner),tm.label,O.block||50,'estudio',O.rest||10);
       r.blocks.forEach(b=>{if(b.cat==='estudio')b.note=tm.note});occ.push(...r.blocks);
       if(r.left>=15)warn.push(`Hoy no caben ${hm(r.left)} de estudio. Muévelos a otro día o empieza antes.`)}
+    // entrenamiento físico: a su hora o en el primer hueco de la tarde (con la comida bajada) antes de cenar
+    const din=T(C.meals.dinner);
+    for(const tr of (O.train||[]).filter(x=>(x.days||[]).includes(i)&&x.min>0)){
+      const mk=s=>B(s,s+tr.min,'deporte',tr.label,'Entrenamiento',{short:tr.label});
+      if(tr.start){occ.push(mk(T(tr.start)));continue}
+      const fit=(a0,z0)=>freeSlots(occ,a0,z0).find(([a,z])=>z-a>=tr.min);
+      const f=fit(lunch?lunch.e+60:t,din)||fit(t,din);
+      if(f)occ.push(mk(f[0]));else warn.push(`Hoy no cabe ${tr.label.toLowerCase()}: muévelo de día o ponle hora.`);
+    }
     const H=Math.max(t,lunch?lunch.e:0,...occ.map(b=>b.e));
-    for(const [a,z] of freeSlots(occ,t,H))if(z-a>=30)occ.push(B(a,z,'libre',z-a>=90?'Tiempo libre':'Descanso'));
+    for(const [a,z] of freeSlots(occ,t,H))if(z-a>=15)occ.push(B(a,z,'libre',z-a>=120?'Tiempo libre':'Descanso'));
     blocks.push(...occ);
     return evening(d,{blocks,H,S,warn,weekend:i>=5,home:true});
   }

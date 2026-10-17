@@ -36,7 +36,7 @@ Cada cosa de la agenda puede llevar aviso (los exámenes y entregas, un día ant
 ## Horarios en PDF y oposiciones
 
 - **PDF:** en «Mi propio horario» se puede subir el PDF del horario (tabla con días arriba y horas a la izquierda, o lista «Lunes 9:00–11:00 Asignatura»). Se lee en el propio móvil con pdf.js y luego se revisa.
-- **Oposiciones:** el perfil «Oposiciones» reparte el temario por semanas, el estudio en bloques con descansos, un día de repaso, simulacros y las clases de academia.
+- **Oposiciones:** el perfil «Oposiciones» tiene tipos (bomberos, Policía Nacional, Policía Local, Guardia Civil, docentes, administración, sanidad, justicia) con sesiones de estudio y entrenos típicos que cada uno ajusta. Se estudia «a mi manera» (sesiones con hora y materia: temario, callejero, test…) o en bloques tipo Pomodoro, con cuenta de temas, día de repaso, simulacros, entrenamiento físico y academia. Las pruebas físicas que se muestran son orientativas: manda cada convocatoria.
 
 ## Sincronizar entre dispositivos (opcional)
 
