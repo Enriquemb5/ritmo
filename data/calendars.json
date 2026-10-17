@@ -1,7 +1,12 @@
 [
- {
-  "id": "ksq43oop2at5jcip66",
-  "name": "Grado en Ingeniería Telemática · UMA",
-  "short": "Telemática · UMA"
- }
+  {
+    "id": "ksq43oop2at5jcip66",
+    "name": "Grado en Ingeniería Telemática · UMA",
+    "short": "Telemática · UMA"
+  },
+  {
+    "id": "ksskzcr3fukamddcj9",
+    "name": "Grado en Ingeniería de Sistemas de Telecomunicación · UMA",
+    "short": "Sistemas de Telecomunicación · UMA"
+  }
 ]
