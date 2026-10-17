@@ -82,6 +82,9 @@ function normCfg(c){
   c.home={...DEFAULT_CFG.home,...c.home};c.place={...DEFAULT_CFG.place,...c.place};
   return c;
 }
+/* hobbies que son deporte: van antes de cenar, nunca con la cena en el estómago */
+const SPORTY=/correr|running|run\b|carrera|trotar|gym|gimnasio|pesas|bici|ciclismo|spinning|nadar|nataci|piscina|f[uú]tbol|baloncesto|basket|p[aá]del|tenis|crossfit|yoga|pilates|entren|deporte|boxeo|escalada|surf|rugby|voley|v[oó]ley|patinar|senderismo|caminar|andar\b/i;
+const hobbyWhen=h=>h.when||(SPORTY.test(h.label||'')?'tarde':'noche');
 const AGENDA_KINDS={tarea:'Tarea',recordatorio:'Recordatorio',examen:'Examen',entrega:'Entrega',viaje:'Viaje',festivo:'Festivo'};
 /* aviso por defecto de cada tipo (minutos antes; '' = sin aviso) */
 const ALERT_DEFAULT={tarea:'',recordatorio:0,examen:1440,entrega:1440,viaje:1440,festivo:''};
@@ -346,7 +349,16 @@ function Engine(cfg,agenda=[]){
     const series=!!o.series;
     let t=H;const ev=[];
     if(series){ev.push(B(t+5,t+5+C.series.min,'deporte',C.series.label,'Ir, calentar, series, vuelta a la calma y volver',{short:'Series'}));t+=5+C.series.min}
-    const din=T(C.meals.dinner),dm=C.meals.dinnerMin;
+    let din=T(C.meals.dinner);const dm=C.meals.dinnerMin;
+    // hobbies de antes de cenar (deporte): después de llegar o, en fin de semana, con la comida ya hecha
+    const todayH=o.trip?[]:(C.hobbies||[]).filter(h=>(h.days||[]).includes(i)&&h.min>0);
+    for(const h of todayH.filter(h=>hobbyWhen(h)==='tarde')){
+      let s=Math.max(t+5,o.weekend?H+90:t+5);if(s+h.min>din)s=Math.max(t+5,din-h.min);
+      if(s+h.min>din+30){warn.push(`Hoy no da tiempo a ${h.label.toLowerCase()} antes de cenar.`);continue}
+      if(s+h.min>din)din=s+h.min; // se retrasa la cena como mucho media hora
+      if(s-t>=15)ev.push(B(t,s,'libre','Tiempo libre'));
+      ev.push(B(s,s+h.min,SPORTY.test(h.label||'')?'deporte':'hobby',h.label,'',{short:h.label}));t=s+h.min;
+    }
     const wantStudy=!opos&&!o.weekend&&i<5&&(C.evStudy.days||[]).includes(i);
     let studied=false;
     if(t<din){const g=din-t;
@@ -354,7 +366,7 @@ function Engine(cfg,agenda=[]){
       else if(g>=15)ev.push(B(t,din,'libre',!series&&!o.weekend&&g>=60&&i<5?'Tiempo libre o deporte':'Tiempo libre'));
       t=din}
     // cena, hueco, hobby, desconectar hasta dormir
-    const hbs=o.trip?[]:(C.hobbies||[]).filter(h=>(h.days||[]).includes(i)&&h.min>0).map(h=>({cat:'hobby',label:h.label,d:h.min,min:Math.min(15,h.min),drop:true}));
+    const hbs=todayH.filter(h=>hobbyWhen(h)==='noche').map(h=>({cat:'hobby',label:h.label,d:h.min,min:Math.min(15,h.min),drop:true}));
     let parts=[{cat:'comida',label:'Cena',d:dm,min:30},{cat:'hueco',d:0,min:0},...hbs,{cat:'rutina',label:'Desconectar',note:'Sin pantallas, deja listo lo de mañana',d:C.wind,min:10}];
     let avail=S-t,need=parts.reduce((a,p)=>a+p.d,0);
     if(avail>need){const gap=avail-need;
