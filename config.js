@@ -5,5 +5,5 @@
 window.RITMO_CONFIG = {
   supabaseUrl: '',
   supabaseKey: '',
-  teamupProxy: ''
+  teamupProxy: 'https://ritmo-teamup.enriquemartinezbueno2305.workers.dev'
 };
