@@ -127,11 +127,18 @@ function customEditor(d,o={}){
     <button type="button" class="addrow" style="grid-column:1/-1;padding:6px 0" data-addslot="${i}">+ Otro día</button>
     <button type="button" class="del" data-delsub="${i}">Quitar</button></div>`).join('')+`<button type="button" class="addrow" data-addsub>${add}</button>`,o.foot||'Cada asignatura puede tener varios días. Se repiten cada semana dentro del periodo de clases.');
 }
+/* clases con fecha importadas (.ics o PDF por semanas): por curso, con su grupo de prácticas */
 function icsPicker(d){
   if(!(d.ics||[]).length)return'';
-  const cnt={};d.ics.forEach(e=>cnt[e[3]]=(cnt[e[3]]||0)+1);const sel=new Set(d.icsSel);
-  const names=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);
-  return`<details class="course" open><summary>Del archivo importado<span class="n">${names.filter(n=>sel.has(n)).length} de ${names.length}</span></summary>${names.map(n=>`<button type="button" class="subj" role="checkbox" aria-checked="${sel.has(n)}" data-icssel="${esc(n)}"><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="nm">${esc(n)}<small>${cnt[n]} clases</small></span></button>`).join('')}</details>`;
+  const info={};for(const e of d.ics){const n=e[3],x=info[n]=info[n]||{n:0,course:e[6]||'Del archivo importado',groups:new Set(),theory:0};x.n++;if(e[5])x.groups.add(e[5]);else x.theory++}
+  const sel=new Set(d.icsSel),G=d.icsGroup||{};
+  const courses=[...new Set(Object.values(info).map(x=>x.course))].sort();
+  const body=courses.map(c=>{const names=Object.keys(info).filter(n=>info[n].course===c).sort((a,b)=>(info[b].n>=4)-(info[a].n>=4)||a.localeCompare(b));const k=names.filter(n=>sel.has(n)).length;
+    return`<details class="course"${k||courses.length===1?' open':''}><summary>${esc(c)}<span class="n">${k?`${k} de ${names.length}`:names.length+' asignaturas'}</span></summary>${names.map(n=>{const x=info[n],gs=[...x.groups].sort();
+      return`<button type="button" class="subj" role="checkbox" aria-checked="${sel.has(n)}" data-icssel="${esc(n)}" data-q="${esc(townKey(n))}"><span class="check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="nm">${esc(n)}<small>${x.theory?`${x.theory} clases`:''}${x.theory&&gs.length?' · ':''}${gs.length?`prácticas en ${gs.length} grupos`:''}</small></span></button>${gs.length&&sel.has(n)?`<div class="grpchips" data-q="${esc(townKey(n))}"><span>Tu grupo de prácticas</span>${gs.map(g=>`<button type="button" data-icsgrp="${esc(n)}" data-g="${esc(g)}" aria-pressed="${G[n]===g}">${esc(g)}</button>`).join('')}</div>`:''}`}).join('')}</details>`}).join('');
+  const many=Object.keys(info).length>8;
+  return`${many?'<input class="search" id="subjQ" type="search" placeholder="Buscar asignatura" autocomplete="off" aria-label="Buscar asignatura">':''}<div id="subjL">${body}</div><p class="empty" id="subjNone" hidden>No hay ninguna asignatura con ese nombre.</p>
+    <label class="addrow" style="display:block;cursor:pointer">+ Añadir otro PDF (otro curso o semestre)<input type="file" accept="application/pdf,.pdf" id="pdfFile" multiple hidden></label><p class="foot" id="pdfMsg" style="margin:0 16px;color:var(--fg2);font-size:13px">${esc(ob.pdfMsg||'')}</p>`;
 }
 const caSel=(p,v)=>`<select class="sel" data-bind="${p}" aria-label="Comunidad autónoma">${CCAA.map(([k,n])=>`<option value="${k}"${k===v?' selected':''}>${n}</option>`).join('')}</select>`;
 const caName=k=>(CCAA.find(c=>c[0]===k)||['',''])[1];
@@ -157,7 +164,7 @@ const STEPS=[
    ${grp('',`<div class="row">${seg('source',[['teamup','TeamUp'],['propio','Mi propio horario']],d.source,true)}</div>`)}
    ${d.source==='teamup'?`${grp('Calendario de TeamUp',`<div class="row"><input type="url" data-bind="teamup" value="${esc(d.teamup)}" placeholder="https://teamup.com/ks…" inputmode="url" autocomplete="off" aria-label="Enlace de TeamUp"></div>`)}
    <div id="tuSt">${tuStatus(d.teamup)}</div><p class="lede" style="font-size:14px;margin:0 4px">Vale cualquier grado: en el siguiente paso eliges tus asignaturas de entre todos los cursos y grupos.</p>`
-   :`${grp('Horario en PDF',`<label class="row file"><span class="lab">Elegir PDF<small>Leo las asignaturas, los días y las horas. Después lo revisas.</small></span><input type="file" accept="application/pdf,.pdf" id="pdfFile" aria-label="Horario en PDF"></label>`,`<span id="pdfMsg">${esc(ob.pdfMsg||'Funciona con horarios en tabla (días arriba, horas a la izquierda) y con listas «Lunes 9:00–11:00 Asignatura».')}</span>`)}
+   :`${grp('Horario en PDF',`<label class="row file"><span class="lab">Elegir PDF<small>Leo las asignaturas, días, horas y grupos de prácticas. Puedes elegir varios (uno por curso).</small></span><input type="file" accept="application/pdf,.pdf" id="pdfFile" multiple aria-label="Horario en PDF"></label>`,`<span id="pdfMsg">${esc(ob.pdfMsg||'Funciona con horarios en tabla (días arriba, horas a la izquierda) y con listas «Lunes 9:00–11:00 Asignatura».')}</span>`)}
    ${grp('Archivo de calendario',`<label class="row file"><span class="lab">Elegir archivo .ics<small>Lo exportan Google Calendar, Outlook, Apple Calendar y muchas universidades.</small></span><input type="file" accept=".ics,text/calendar" id="icsFile" aria-label="Archivo .ics"></label>`,d.ics.length?`${d.ics.length} clases importadas. Elige cuáles quieres en el siguiente paso.`:'')}
    ${grp('¿Lo tienes en foto?',`<div class="row"><span class="lab">Mándasela a Claude<small>Pídele «el código de Ritmo de mi horario» y pégalo aquí.</small></span></div><div class="row"><input type="text" id="codeIn" placeholder="Pega aquí el código" autocomplete="off" aria-label="Código del horario"></div><button type="button" class="addrow" data-pastecode>Usar este código</button>`)}
    <p class="lede" style="font-size:15px">También puedes escribirlo a mano en el siguiente paso.</p>`}`},
@@ -231,7 +238,10 @@ const visSteps=d=>STEPS.filter(s=>!s.when||s.when(d));
 function pn(id){const v=visSteps(ob.d).filter(s=>s.id!=='hola'&&s.id!=='listo');return`Paso ${v.findIndex(s=>s.id===id)+1} de ${v.length}`}
 const stepIdx=id=>typeof id==='number'?id:Math.max(0,STEPS.findIndex(s=>s.id===id));
 const nextVis=(i,dir)=>{let j=i+dir;while(j>=0&&j<STEPS.length&&STEPS[j].when&&!STEPS[j].when(ob.d))j+=dir;return j};
-function startOB(step=0,edit=false){ob={step:stepIdx(step),d:normCfg(clone(cfg||DEFAULT_CFG)),edit,hist:[]};$('#tabs').hidden=true;$('#fab').hidden=true;renderOB(true)}
+/* quien empieza de cero no hereda el horario de nadie */
+function blankCfg(){const c=normCfg(clone(DEFAULT_CFG));Object.assign(c,{teamup:'',subjects:[],events:[],hobbies:[],parityA:null,leave:['auto','auto','auto','auto','auto'],evStudy:{days:[],min:90}});
+  c.work={...c.work,on:false};c.series={...c.series,on:false};c.run={...c.run,on:false};c.home={ca:'AN',town:''};c.place={same:true,ca:'AN',town:''};return c}
+function startOB(step=0,edit=false){ob={step:stepIdx(step),d:cfg?normCfg(clone(cfg)):blankCfg(),edit,hist:[]};$('#tabs').hidden=true;$('#fab').hidden=true;renderOB(true)}
 function renderOB(top){
   const st=STEPS[ob.step],d=ob.d,y=window.scrollY;
   const chain=ob.edit&&(st.id==='perfil'||st.id==='clases');
@@ -533,7 +543,7 @@ async function saveNote(){
 document.addEventListener('input',e=>{
   if(!ob)return;const el=e.target,p=el.dataset.bind;
   if(el.id==='subjQ'){const q=townKey(el.value);let any=0;
-    $$('#subjL details').forEach(det=>{let n=0;det.querySelectorAll('.subj').forEach(b=>{const m=!q||b.dataset.q.includes(q);b.hidden=!m;if(m)n++});det.hidden=!n;if(q)det.open=n>0;any+=n});
+    $$('#subjL details').forEach(det=>{let n=0;det.querySelectorAll('.subj').forEach(b=>{const m=!q||b.dataset.q.includes(q);b.hidden=!m;if(m)n++});det.querySelectorAll('.grpchips').forEach(c=>c.hidden=!!q&&!c.dataset.q.includes(q));det.hidden=!n;if(q)det.open=n>0;any+=n});
     $('#subjNone').hidden=any>0;return}
   if(!p)return;
   setP(ob.d,p,el.value);
@@ -550,13 +560,21 @@ document.addEventListener('change',async e=>{
   if(el.id==='icsFile'&&el.files&&el.files[0]){const f=el.files[0];if(f.size>5e6){toast('El archivo es demasiado grande');return}
     const ev=parseICS(await f.text());if(!ev.length){toast('No he encontrado clases en ese archivo');return}
     ob.d.ics=ev;const names=[...new Set(ev.map(x=>x[3]))];ob.d.icsSel=names;toast(`${ev.length} clases importadas`);renderOB();return}
-  if(el.id==='pdfFile'&&el.files&&el.files[0]){const f=el.files[0];const msg=t=>{ob.pdfMsg=t;const m=$('#pdfMsg');if(m)m.textContent=t};
-    if(f.size>15e6){msg('El PDF es demasiado grande (máximo 15 MB).');return}
-    msg('Leyendo el PDF…');
-    try{const r=parseScheduleItems(await pdfItems(await f.arrayBuffer()));
-      if(!r.subjects.length){msg('No he encontrado clases en este PDF. Si es una foto escaneada, usa la opción de la foto o escríbelo a mano.');return}
-      ob.d.custom=r.subjects;ob.d.source='propio';ob.pdfMsg='';toast(`${r.subjects.length} asignaturas leídas del PDF. Revisa días y horas.`);ob.hist.push(ob.step);ob.step=nextVis(ob.step,1);renderOB(true)}
-    catch(err){msg('No he podido abrir el PDF. Comprueba que no tiene contraseña o prueba con otra opción.')}
+  if(el.id==='pdfFile'&&el.files&&el.files.length){const files=[...el.files];const msg=t=>{ob.pdfMsg=t;const m=$('#pdfMsg');if(m)m.textContent=t};
+    if(files.some(f=>f.size>15e6)){msg('El PDF es demasiado grande (máximo 15 MB).');return}
+    msg(files.length>1?`Leyendo ${files.length} PDF…`:'Leyendo el PDF…');
+    let weekly=0,dated=0,courses=[];
+    for(const f of files){
+      try{const P=await pdfItems(await f.arrayBuffer());const course=P.course||f.name.replace(/\.pdf$/i,'').replace(/[_-]+/g,' ').slice(0,40);
+        const r=parseScheduleItems(P.items,P.edges,course);
+        if(r.dated&&r.events.length){ob.d.ics=[...(ob.d.ics||[]).filter(e=>e[6]!==course),...r.events];dated+=r.events.length;courses.push(course)}
+        else if(r.subjects.length){ob.d.custom=[...ob.d.custom,...r.subjects];weekly+=r.subjects.length}}
+      catch(err){}
+    }
+    if(!weekly&&!dated){msg('No he encontrado clases en este PDF. Si es una foto escaneada, usa la opción de la foto o escríbelo a mano.');return}
+    ob.d.source='propio';ob.pdfMsg='';
+    toast(dated?`${courses.join(' y ')}: marca tus asignaturas y tu grupo de prácticas`:`${weekly} asignaturas leídas del PDF. Revisa días y horas.`);
+    if(STEPS[ob.step].id!=='asig'){ob.hist.push(ob.step);ob.step=nextVis(ob.step,1)}renderOB(true);
     return}
   if(el.dataset.bindn){setP(ob.d,el.dataset.bindn,Number(el.value));if(el.dataset.bindn.startsWith('opos.'))renderOB();return}
   if(el.dataset.sw){setP(ob.d,el.dataset.sw,el.checked);renderOB()}
@@ -572,6 +590,8 @@ document.addEventListener('click',async e=>{
       if(t.dataset.seg==='place.same'&&!v&&!ob.d.place.town)ob.d.place.ca=ob.d.home.ca;
       return renderOB()}
     if(t.dataset.stp){const p=t.dataset.stp,v=Number(getP(ob.d,p))+Number(t.dataset.d);setP(ob.d,p,Math.min(Number(t.dataset.max),Math.max(Number(t.dataset.min),Math.round(v*100)/100)));return renderOB()}
+    if(t.dataset.icsgrp){const n=t.dataset.icsgrp,g=t.dataset.g,G=ob.d.icsGroup=ob.d.icsGroup||{};G[n]=G[n]===g?'':g;return renderOB()}
+    if(t.dataset.icssel){const k=t.dataset.icssel,s=new Set(ob.d.icsSel);s.has(k)?s.delete(k):s.add(k);ob.d.icsSel=[...s];return renderOB()}
     if(t.dataset.subj||t.dataset.icssel){const isI=!!t.dataset.icssel,k=isI?t.dataset.icssel:t.dataset.subj,arr=isI?'icsSel':'subjects',s=new Set(ob.d[arr]);s.has(k)?s.delete(k):s.add(k);ob.d[arr]=[...s];t.setAttribute('aria-checked',s.has(k));const det=t.closest('details'),n=det.querySelectorAll('[aria-checked="true"]').length,tot=det.querySelectorAll('.subj').length;det.querySelector('.n').textContent=n?`${n} de ${tot}`:`${tot} asignaturas`;return}
     if(t.dataset.leave!==undefined){const i=+t.dataset.leave;ob.d.leave[i]=t.dataset.v==='auto'?'auto':(ob.d.leave[i]==='auto'?'09:30':ob.d.leave[i]);return renderOB()}
     if(t.dataset.days){const arr=getP(ob.d,t.dataset.days)||[],i=+t.dataset.i,s=new Set(arr);s.has(i)?s.delete(i):s.add(i);setP(ob.d,t.dataset.days,[...s].sort());return renderOB()}

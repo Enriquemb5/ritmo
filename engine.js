@@ -76,6 +76,7 @@ function normCfg(c){
   if(!Array.isArray(c.hobbies)){c.hobbies=c.hobby&&c.hobby.on!==false?[{id:'h1',label:c.hobby.label||'Hobby',min:c.hobby.min||30,days:[0,1,2,3,4,5,6]}]:[]}
   delete c.hobby;
   for(const k of ['custom','ics','icsSel'])if(!Array.isArray(c[k]))c[k]=[];
+  if(!c.icsGroup||typeof c.icsGroup!=='object')c.icsGroup={};
   if(!c.source)c.source=teamupId(c.teamup)?'teamup':'propio';
   if(c.margin==null)c.margin=10;
   c.meals={...DEFAULT_CFG.meals,...c.meals};
@@ -138,7 +139,9 @@ function Engine(cfg,agenda=[]){
   const drive=dep=>rushy(dep)?C.commute.rush:C.commute.normal;
   const usesTeamup=C.source!=='propio'&&!!CAT_ID&&teamupId(C.teamup)===CAT_ID;
   const icsSel=new Set(C.icsSel||[]);
-  const ICS={};(C.ics||[]).forEach(e=>{if(icsSel.has(e[3]))(ICS[e[0]]=ICS[e[0]]||[]).push(e)});
+  /* clases con fecha (archivo .ics o PDF por semanas); las de prácticas solo las de tu grupo */
+  const IG=C.icsGroup||{},ICS={};let icsFirst='9999',icsLast='0000';
+  (C.ics||[]).forEach(e=>{if(e[0]<icsFirst)icsFirst=e[0];if(e[0]>icsLast)icsLast=e[0];if(icsSel.has(e[3])&&(!e[5]||!IG[e[3]]||IG[e[3]]===e[5]))(ICS[e[0]]=ICS[e[0]]||[]).push(e)});
   const inRange=d=>{const k=ymd(d);return k>=CAT_FIRST&&k<=CAT_LAST};
 
   function classes(d){
@@ -150,7 +153,7 @@ function Engine(cfg,agenda=[]){
     if(C.source==='propio'){
       const r=C.customRange||{};
       if((!r.from||k>=r.from)&&(!r.to||k<=r.to))for(const s of C.custom||[])for(const sl of s.slots||[])if(sl.dow===i&&sl.start&&sl.end)out.push(B(T(sl.start),T(sl.end),'clase',s.name,where(sl.loc||''),{short:shortName(s.name),fixed:true}));
-      for(const e of ICS[k]||[])out.push(B(T(e[1]),T(e[2]),'clase',e[3],where(e[4]||''),{short:shortName(e[3]),fixed:true}));
+      for(const e of ICS[k]||[])out.push(B(T(e[1]),T(e[2]),'clase',e[3],[e[5]?`Prácticas · grupo ${e[5]}`:'',where(e[4]||'')].filter(Boolean).join(' · '),{short:shortName(e[3])+(e[5]?' (P)':''),fixed:true}));
     }
     return out.sort((a,b)=>a.s-b.s);
   }
@@ -307,7 +310,7 @@ function Engine(cfg,agenda=[]){
       return evening(d,{blocks,H,S,warn,weekend:true,home:true});
     }
     const cls=M.cls||classes(d),evs=M.evs||events(d);
-    if(!hol&&(usesTeamup&&inRange(d)&&sel.size||C.source==='propio'&&(C.custom.length||icsSel.size))&&!cls.length)warn.push('No tienes clases este día. Organiza la jornada como te venga mejor.');
+    if(!hol&&(usesTeamup&&inRange(d)&&sel.size||C.source==='propio'&&(C.custom.length||icsSel.size&&k>=icsFirst&&k<=icsLast))&&!cls.length)warn.push('No tienes clases este día. Organiza la jornada como te venga mejor.');
     // solapes entre clases y eventos
     const fx=[...cls,...evs].sort((a,b)=>a.s-b.s);
     for(let a=0;a<fx.length;a++)for(let b=a+1;b<fx.length;b++)if(fx[b].s<fx[a].e&&fx[b].e>fx[a].s)warn.push(`Se solapan ${fx[a].label} y ${fx[b].label} (${clock(Math.max(fx[a].s,fx[b].s))}–${clock(Math.min(fx[a].e,fx[b].e))}).`);
