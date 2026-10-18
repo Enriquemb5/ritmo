@@ -298,8 +298,8 @@ function importCode(raw){
 /* ================= app ================= */
 function greet(){const h=now.getHours();return h<6?'Buenas noches':h<14?'Buenos días':h<21?'Buenas tardes':'Buenas noches'}
 function summary(P){
-  const cl=P.b.filter(b=>b.cat==='clase').length,w=P.b.filter(b=>b.cat==='trabajo').reduce((a,b)=>a+b.e-b.s,0),sp=P.b.find(b=>b.cat==='deporte');
-  const p=[];if(P.trip)p.push('De viaje');if(P.hol&&!P.trip)p.push('Festivo');if(cl)p.push(`${cl} ${cl>1?'clases':'clase'}`);if(P.src==='opos'){const st=P.b.filter(b=>b.cat==='estudio').reduce((a,b)=>a+b.e-b.s,0);if(st)p.push(`${hm(st)} de estudio`)}if(w)p.push(`${hm(w)} de trabajo`);if(sp)p.push(`${sp.label.toLowerCase()} a las ${clock(sp.s)}`);if(!p.length)p.push('Día tranquilo');
+  const cl=P.b.filter(b=>b.cat==='clase').length,w=P.b.filter(b=>b.cat==='trabajo').reduce((a,b)=>a+b.e-b.s,0),sps=P.b.filter(b=>b.cat==='deporte'),sp=sps[0];
+  const p=[];if(P.trip)p.push('De viaje');if(P.hol&&!P.trip)p.push('Festivo');if(cl)p.push(`${cl} ${cl>1?'clases':'clase'}`);if(P.src==='opos'){const st=P.b.filter(b=>b.cat==='estudio').reduce((a,b)=>a+b.e-b.s,0);if(st)p.push(`${hm(st)} de estudio`)}if(w)p.push(`${hm(w)} de trabajo`);for(const x of sps)p.push(`${x.label.toLowerCase()} a las ${clock(x.s)}`);if(!p.length)p.push('Día tranquilo');
   return p.join(' · ');
 }
 function status(){

@@ -321,7 +321,7 @@ body.wide .hero .display{font-size:clamp(30px,4vw,46px)}
 .mcol .hl{position:absolute;left:0;right:0;border-top:.5px solid var(--sep)}
 .mcol .ev{padding:3px 5px 3px 8px;border-radius:7px}
 .mcol .ev .tt{font-size:12.5px}.mcol .ev .tm{font-size:11px}
-.mcol .ev.xs .tm{display:none}
+.mcol .ev.xs .tm{font-size:10px}
 .mcol .nmk span{font-size:10px;padding:1px 6px;top:-9px}
 .adbar{display:flex;flex-direction:column;gap:3px;width:100%;padding:4px 2px 0}
 .adc{font-size:11px;font-weight:700;padding:3px 7px;border-radius:7px;background:var(--k);color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -349,8 +349,9 @@ select.sel{border:0;background:var(--fill);border-radius:8px;padding:5px 8px;fon
 .acb{display:flex;align-items:baseline;gap:8px;border:0;background:none;text-align:left;padding:10px 16px;font-size:16px;color:var(--accent);border-top:.5px solid var(--sep)}
 .acb small{color:var(--fg2);font-size:13px}
 .ev.xxs{padding:0 6px 0 9px;border-radius:5px;line-height:1}
-.ev.xxs .tt{font-size:11px;line-height:inherit}.ev.xxs .tm{display:none}
+.ev.xxs .tt{font-size:11px;line-height:inherit}.ev.xxs .tm{font-size:10px;line-height:inherit}
 @media (min-width:700px) and (min-height:501px){.fab{bottom:calc(14px + env(safe-area-inset-bottom,0px));right:max(16px,calc(50% - 210px - 70px))}}
+.ev.xs{white-space:nowrap}.ev.xs .tt{flex:0 1 auto;min-width:0}.ev.xs .tm{flex:none;opacity:.8}
 #nKinds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px}
 </style>
 </head>

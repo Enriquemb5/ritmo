@@ -320,7 +320,7 @@ function Engine(cfg,agenda=[]){
       for(const ss of (C.weekend||[]).filter(x=>(x.days||[]).includes(di)&&x.start&&x.end).sort((a,b)=>T(a.start)-T(b.start)))
         for(const [a,z] of freeSlots(occ,Math.max(T(ss.start),t),T(ss.end)))if(z-a>=15)occ.push(B(a,z,ss.cat||'estudio',ss.label||'Estudio',(ss.cat||'estudio')==='estudio'&&/^estudio$/i.test(ss.label||'Estudio')?'Ejercicios y lo que vaya atrasado':''));
       if(C.run.on&&C.run.dow===i){const s0=Math.max(t,T(C.run.start)),f=freeSlots(occ,s0,s0+600).find(([a,z])=>z-a>=C.run.min);
-        if(f)occ.push(B(f[0],f[0]+C.run.min,'deporte',C.run.label,'Incluye ir, calentar, estirar y ducha',{short:'Correr'}))}
+        if(f)occ.push(B(f[0],f[0]+C.run.min,'deporte',C.run.label,'Incluye ir, calentar, estirar y ducha',{short:C.run.label||'Deporte'}))}
       const L=pickLunch(occ,t);if(L)occ.push(B(L.s,L.s+Math.max(L.dur,Math.min(60,(C.meals.lunchMin||45)+15)),'comida','Comida'));
       H=Math.max(t,...occ.map(b=>b.e));
       for(const [a,z] of freeSlots(occ,t,H))if(z-a>=15)occ.push(B(a,z,'libre','Tiempo libre'));
@@ -415,7 +415,10 @@ function Engine(cfg,agenda=[]){
     const i=dow(d);let {blocks,H,S,warn}=o;
     const series=!!o.series;
     let t=H;const ev=[];
-    if(series){ev.push(B(t+5,t+5+C.series.min,'deporte',C.series.label,'Ir, calentar, series, vuelta a la calma y volver',{short:'Series'}));t+=5+C.series.min}
+    if(series){const lb=C.series.label||'Deporte',gy=GYMY.test(lb);let s0=t+5,nt=/serie|pista|atletismo/i.test(lb)?'Ir, calentar, series, vuelta a la calma y volver':'Ir, entrenar y volver';
+      if(gy){const r=offPeak(s0,C.series.min,t+5,T(C.series.endBy||'22:30'));s0=r.s;if(r.moved)nt+=' · fuera de la hora punta';else if(r.peak)nt+=' · hoy en hora punta'}
+      if(s0-t>=15)ev.push(B(t,s0,'libre','Tiempo libre'));
+      ev.push(B(s0,s0+C.series.min,'deporte',lb,nt,{short:lb}));t=s0+C.series.min}
     let din=T(C.meals.dinner);const dm=C.meals.dinnerMin;
     // hobbies de antes de cenar (deporte): después de llegar o, en fin de semana, con la comida ya hecha
     const todayH=o.trip?[]:(C.hobbies||[]).filter(h=>(h.days||[]).includes(i)&&h.min>0);
