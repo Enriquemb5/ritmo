@@ -344,6 +344,13 @@ select.sel{border:0;background:var(--fill);border-radius:8px;padding:5px 8px;fon
 .grpchips span{width:100%;font-size:12px;font-weight:600;color:var(--fg2)}
 .grpchips button{border:0;border-radius:999px;padding:6px 12px;font-size:14px;font-weight:600;background:var(--fill);font-variant-numeric:tabular-nums}
 .grpchips button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.acl{display:flex;flex-direction:column}
+.acl:empty{display:none}
+.acb{display:flex;align-items:baseline;gap:8px;border:0;background:none;text-align:left;padding:10px 16px;font-size:16px;color:var(--accent);border-top:.5px solid var(--sep)}
+.acb small{color:var(--fg2);font-size:13px}
+.ev.xxs{padding:0 6px 0 9px;border-radius:5px;line-height:1}
+.ev.xxs .tt{font-size:11px;line-height:inherit}.ev.xxs .tm{display:none}
+@media (min-width:700px) and (min-height:501px){.fab{bottom:calc(14px + env(safe-area-inset-bottom,0px));right:max(16px,calc(50% - 210px - 70px))}}
 #nKinds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px}
 </style>
 </head>

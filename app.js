@@ -81,14 +81,15 @@ async function loadLive(id){
   catch(e){const c=LS.get(key,null);if(c){setCatalog(meta,c);return true}return false}
 }
 const loadCat=async id=>await loadCatalog(id)||await loadLive(id);
-const view={tab:'hoy',sel:sod(new Date()),span:LS.get('ritmo-span',7)};
+const view={tab:'hoy',sel:sod(new Date()),span:LS.get('ritmo-span',window.innerWidth>=900?7:1)};
 const rebuild=()=>{E=cfg?Engine(cfg,notes):null};
 const nmin=()=>now.getHours()*60+now.getMinutes();
 const itemsOn=d=>{const k=ymd(d);return notes.filter(n=>n.kind==='viaje'||n.kind==='festivo'?k>=n.date&&k<=(n.end||n.date):n.date===k).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99')||(a.created||0)-(b.created||0))};
 const kindOf=ns=>['examen','entrega','viaje','festivo','tarea','recordatorio'].find(k=>ns.some(n=>n.kind===k&&!n.done))||'';
 function toast(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,2200)}
 /* cuántos días caben: móvil 1, móvil en horizontal 3, ordenador 2-7 (por defecto la semana) */
-function cols(){const w=window.innerWidth,h=window.innerHeight;if(w>=900)return Math.max(2,view.span||7);if(w>h&&w>=560)return 3;return 1}
+const spanOpts=()=>{const w=window.innerWidth,h=window.innerHeight;if(h<500&&w>h)return null;return w>=900?[1,2,3,7]:w>=700?[1,2,3]:null};
+function cols(){const w=window.innerWidth,h=window.innerHeight,o=spanOpts();if(o){const v=view.span||(w>=900?7:1);return o.includes(v)?v:o[o.length-1]}if(w>h&&w>=560)return 3;return 1}
 
 /* ================= cuestionario ================= */
 const sw=(p,v)=>`<label class="sw"><input type="checkbox" data-sw="${p}"${v?' checked':''}><span></span></label>`;
@@ -100,7 +101,7 @@ const tin=(p,v)=>`<input type="time" data-bind="${p}" value="${esc(v)}">`;
 const txt=(p,v,ph)=>`<input type="text" data-bind="${p}" value="${esc(v)}" placeholder="${esc(ph)}">`;
 const grp=(h,body,foot)=>`<section class="grp">${h?`<h4>${h}</h4>`:''}<div class="list">${body}</div>${foot?`<p class="foot">${foot}</p>`:''}</section>`;
 const head=(n,t,l)=>`<p class="eyebrow">${n}</p><h1 class="display">${t}</h1>${l?`<p class="lede">${l}</p>`:''}`;
-const dayChips=(path,days)=>`<div class="chips">${DL.map((l,i)=>`<button type="button" data-days="${path}" data-i="${i}" aria-pressed="${(days||[]).includes(i)}">${DN[i].slice(0,3)}</button>`).join('')}</div>`;
+const dayChips=(path,days,only)=>`<div class="chips">${DL.map((l,i)=>only&&!only.includes(i)?'':`<button type="button" data-days="${path}" data-i="${i}" aria-pressed="${(days||[]).includes(i)}">${DN[i].slice(0,3)}</button>`).join('')}</div>`;
 
 const known=url=>!!CAT_ID&&teamupId(url)===CAT_ID;
 const calOf=url=>CALS.find(c=>c.id===teamupId(url));
@@ -148,7 +149,14 @@ function festNote(d){
   const yrs=FEST?[y,y+1].filter(x=>FEST[x]).join(' y '):'';
   return`Festivos nacionales y de ${esc(caName(p.ca))}${yrs?` (${yrs})`:''}. `+(p.town?(loc?`También los locales de ${esc(p.town)}.`:`Los locales de ${esc(p.town)} aún no los tengo: márcalos en Agenda → Festivo.`):'Escribe tu municipio para los festivos locales.');
 }
-const townsList=()=>`<datalist id="towns">${Object.keys((FEST&&FEST.local)||{}).map(k=>`<option value="${esc(k.split('|')[1])}">`).join('')}</datalist>`;
+/* buscador de municipios (los 8.132 del INE, se cargan al llegar a este paso) */
+let MUNI=null;const loadMuni=async()=>{if(!MUNI){try{MUNI=await (await fetch('data/municipios.json')).json()}catch(e){MUNI={}}}return MUNI};
+function muniFind(q,ca){q=townKey(q);if(q.length<2||!MUNI)return[];const out=[];
+  for(const k of Object.keys(MUNI)){if(k==='fuente')continue;for(const pr in MUNI[k])for(const n of MUNI[k][pr].split('|')){const t=townKey(n);const sc=t===q?0:t.startsWith(q)?1:t.includes(q)?2:9;if(sc<9)out.push({n,pr,k,sc:sc+(k===ca?0:3)})}}
+  return out.sort((a,b)=>a.sc-b.sc||a.n.length-b.n.length).slice(0,6)}
+function acRender(w){const box=$('#ac-'+w);if(!box||!ob)return;const q=ob.d[w].town||'';const r=muniFind(q,ob.d[w].ca);
+  box.innerHTML=r.length&&!(r[0].sc===0&&townKey(r[0].n)===townKey(q)&&r[0].k===ob.d[w].ca)?r.map(x=>`<button type="button" class="acb" data-acpick="${w}" data-v="${esc(x.n)}" data-ca="${x.k}"><span>${esc(x.n)}</span><small>${esc(x.pr)}${x.k!==ob.d[w].ca?' · '+esc(caName(x.k)):''}</small></button>`).join(''):''}
+const townsList=()=>'';
 const isOpos=d=>d.profile==='opos';
 const STEPS=[
  {id:'hola',btn:'Empezar',render:()=>`<section class="hero-ob">${logo(64)}${head('Ritmo','Tu semana,<br><span class="grad">en orden.</span>','Cuéntame cómo es tu día y monto tu rutina con tus clases o tu temario, tu trabajo, tu deporte, tus hobbies y tus ratos libres.')}
@@ -158,8 +166,8 @@ const STEPS=[
  {id:'nombre',render:d=>`${head(pn('nombre'),'¿Cómo te<br>llamas?')}<input class="big-in" data-bind="name" value="${esc(d.name)}" placeholder="Tu nombre" autocomplete="given-name" aria-label="Tu nombre">`,ok:d=>d.name.trim().length>0},
  {id:'perfil',render:d=>`${head(pn('perfil'),'Sobre ti','Para saber qué horario montarte y qué días son festivo.')}
    ${grp('Ahora mismo',`<div class="row">${seg('profile',[['uni','Universidad'],['opos','Oposiciones'],['otro','Otro']],d.profile,true)}</div>`,d.profile==='otro'?'FP, bachillerato, un trabajo con horario… Podrás poner tu horario a mano, desde un calendario o desde un PDF.':d.profile==='opos'?'Repartimos el temario por semanas, con bloques de estudio, repasos y simulacros.':'')}
-   ${grp('Dónde vives',row('Comunidad',caSel('home.ca',d.home.ca))+row('Municipio',`<input type="text" class="tin" data-bind="home.town" value="${esc(d.home.town)}" placeholder="Mijas" list="towns" autocomplete="address-level2" aria-label="Municipio donde vives">`))}
-   ${grp(isOpos(d)?'¿Dónde está tu academia o tu trabajo?':'¿Dónde estudias o trabajas?',`<div class="row">${seg('place.same',[[true,'En el mismo sitio'],[false,'En otro municipio']],d.place.same,true)}</div>`+(d.place.same?'':row('Comunidad',caSel('place.ca',d.place.ca))+row('Municipio',`<input type="text" class="tin" data-bind="place.town" value="${esc(d.place.town)}" placeholder="Málaga" list="towns" aria-label="Municipio donde estudias o trabajas">`)),`<span id="festN">${festNote(d)}</span>`)}${townsList()}`},
+   ${grp('Dónde vives',row('Comunidad',caSel('home.ca',d.home.ca))+row('Municipio',`<input type="text" class="tin" data-bind="home.town" value="${esc(d.home.town)}" placeholder="Escribe tu municipio" autocomplete="off" aria-label="Municipio donde vives">`)+'<div class="acl" id="ac-home"></div>')}
+   ${grp(isOpos(d)?'¿Dónde está tu academia o tu trabajo?':'¿Dónde estudias o trabajas?',`<div class="row">${seg('place.same',[[true,'En el mismo sitio'],[false,'En otro municipio']],d.place.same,true)}</div>`+(d.place.same?'':row('Comunidad',caSel('place.ca',d.place.ca))+row('Municipio',`<input type="text" class="tin" data-bind="place.town" value="${esc(d.place.town)}" placeholder="Escribe el municipio" autocomplete="off" aria-label="Municipio donde estudias o trabajas">`)+'<div class="acl" id="ac-place"></div>'),`<span id="festN">${festNote(d)}</span>`)}${townsList()}`},
  {id:'clases',when:d=>!isOpos(d),render:d=>`${head(pn('clases'),'Tu horario','¿De dónde lo saco?')}
    ${grp('',`<div class="row">${seg('source',[['teamup','TeamUp'],['propio','Mi propio horario']],d.source,true)}</div>`)}
    ${d.source==='teamup'?`${grp('Calendario de TeamUp',`<div class="row"><input type="url" data-bind="teamup" value="${esc(d.teamup)}" placeholder="https://teamup.com/ks…" inputmode="url" autocomplete="off" aria-label="Enlace de TeamUp"></div>`)}
@@ -222,6 +230,12 @@ const STEPS=[
      <div class="full">${seg(`hobbies.${i}.when`,[['tarde','Antes de cenar'],['noche','Después de cenar']],hobbyWhen(h),true)}</div>
      <button type="button" class="del" data-delhob="${i}">Quitar hobby</button></div>`).join(''))+`<button type="button" class="addrow" data-addhob>+ Añadir hobby</button>`,'El deporte (correr, gimnasio, bici…) va antes de cenar; lo tranquilo, después. Si un día acabas tarde, se acortan antes de quitarte sueño.')}
    ${grp('Deporte entre semana',row('Activado',sw('series.on',d.series.on))+(d.series.on?row('Qué',txt('series.label',d.series.label,'Series en pista'))+row('Días por semana',stp('series.count',d.series.count,1,5,1,'x'))+row('Duración',stp('series.min',d.series.min,30,240,15,'min'),'Desde que sales hasta que vuelves')+row('Terminar antes de',tin('series.endBy',d.series.endBy)):''))}
+   ${grp('Fin de semana',(d.weekend||[]).map((x,i)=>`<div class="mtg"><input type="text" data-bind="weekend.${i}.label" value="${esc(x.label)}" placeholder="Estudio, trabajo, plan…" aria-label="Qué haces">
+     <select data-bind="weekend.${i}.cat" aria-label="Tipo">${[['estudio','Estudio'],['trabajo','Trabajo'],['libre','Tiempo libre'],['hobby','Hobby']].map(([v,l])=>`<option value="${v}"${(x.cat||'estudio')===v?' selected':''}>${l}</option>`).join('')}</select>
+     <input type="time" data-bind="weekend.${i}.start" value="${esc(x.start)}" aria-label="Empieza"><input type="time" data-bind="weekend.${i}.end" value="${esc(x.end)}" aria-label="Termina">
+     <div class="full">${dayChips(`weekend.${i}.days`,x.days,[5,6])}</div>
+     <button type="button" class="del" data-delwe="${i}">Quitar</button></div>`).join('')+`<button type="button" class="addrow" data-addwe>+ Añadir sesión de fin de semana</button>`,'Lo que haces sábado y domingo con su hora: estudiar, trabajar, un plan… Lo demás queda como tiempo libre. Los festivos entre semana van como un sábado.')}
+   ${grp('Gimnasio: horas punta',row('Si hay gente',seg('gym.avoid',[['evitar','Prefiero evitarlo'],['igual','Me da igual']],d.gym.avoid))+(d.gym.avoid!=='igual'?d.gym.peaks.map((pk,i)=>`<div class="mtg"><input type="time" data-bind="gym.peaks.${i}.0" value="${esc(pk[0])}" aria-label="Hora punta desde"><input type="time" data-bind="gym.peaks.${i}.1" value="${esc(pk[1])}" aria-label="Hora punta hasta"><button type="button" class="del" data-delpk="${i}">Quitar esta hora punta</button></div>`).join('')+`<button type="button" class="addrow" data-addpk>+ Añadir otra hora punta</button>`:''),d.gym.avoid!=='igual'?'Si sabes cuándo se llena tu gimnasio, ponlo. Si no, uso la hora punta habitual (de 18:30 a 21:00). Los entrenos de gimnasio se mueven fuera de esas horas cuando caben.':'Los entrenos de gimnasio van a la hora que mejor encaje, haya gente o no.')}
    ${grp('Deporte el fin de semana',row('Activado',sw('run.on',d.run.on))+(d.run.on?row('Qué',txt('run.label',d.run.label,'Carrera'))+row('Día',seg('run.dow',[[5,'Sábado'],[6,'Domingo']],d.run.dow))+row('Hora',tin('run.start',d.run.start))+row('Duración',stp('run.min',d.run.min,30,240,15,'min')):''))}
    ${isOpos(d)?'':grp('Estudio por la noche',`<div class="row">${dayChips('evStudy.days',d.evStudy.days)}</div>`+row('Duración',stp('evStudy.min',d.evStudy.min,30,180,15,'min')),'Si ese día llegas pronto a casa, repasas antes o después de cenar.')}
    ${grp('Comidas',row('Comida a partir de',tin('meals.lunch',d.meals.lunch))+row('Como muy tarde',tin('meals.lunchLate',d.meals.lunchLate))+row('Cena',tin('meals.dinner',d.meals.dinner)),'Si te queda poco trabajo, lo terminas del tirón y comes al acabar, sin pasar de la hora límite.')}`},
@@ -314,7 +328,7 @@ function weekNav(){
   const a=c>1&&c<7?st:mon,z=c>1&&c<7?en:addDays(mon,6);
   const rng=a.getMonth()===z.getMonth()?`${a.getDate()}–${z.getDate()} de ${MES[z.getMonth()]}`:`${a.getDate()} ${MES[a.getMonth()].slice(0,3)} – ${z.getDate()} ${MES[z.getMonth()].slice(0,3)}`;
   const ttl=c>1&&c<7?(isThis?'Desde hoy':`${c} días`):(isThis?'Esta semana':'Semana '+isoWeek(mon));
-  const spanSel=window.innerWidth>=900&&view.tab==='hoy'?`<div class="seg" role="group" aria-label="Días a la vista">${[[2,'2 días'],[3,'3 días'],[7,'Semana']].map(([v,l])=>`<button data-span="${v}" aria-pressed="${view.span===v}">${l}</button>`).join('')}</div>`:'';
+  const o=spanOpts();const spanSel=o&&view.tab==='hoy'?`<div class="seg" role="group" aria-label="Días a la vista">${o.map(v=>`<button data-span="${v}" aria-pressed="${c===v}">${v===1?'1 día':v===7?'Semana':v+' días'}</button>`).join('')}</div>`:'';
   return`<div class="wnav"><div class="t">${ttl}<small>${rng}${cfg.events.some(e=>e.freq!=='all')?` · semana ${E.parity(mon)}`:''}</small></div><div class="arr">${spanSel}${isThis?'':`<button class="icb pillb" data-act="today" aria-label="Volver a hoy">Hoy</button>`}<button class="icb" data-act="prev" aria-label="Anterior">‹</button><button class="icb" data-act="next" aria-label="Siguiente">›</button></div></div>`;
 }
 function strip(){
@@ -322,8 +336,8 @@ function strip(){
   return`<div class="strip" role="group" aria-label="Días">${DS.map((s,i)=>{const d=addDays(mon,i),P=E.plan(d),ns=itemsOn(d),k=kindOf(ns);
     return`<button data-day="${i}" aria-pressed="${sameDay(d,view.sel)}" class="${sameDay(d,now)?'today':''}${P.hol?' hol':''}" aria-label="${DN[i]} ${d.getDate()}${P.hol?', festivo':''}${ns.length?`, ${ns.length} en la agenda`:''}${P.warn.length?', con cambios':''}"><span class="dn">${s}</span><span class="dd">${d.getDate()}</span><span class="dots">${k?`<i data-k="${k}"></i>`:''}${P.warn.length?'<i></i>':''}</span></button>`}).join('')}</div>`;
 }
-const evHTML=(b,y,PX,isT,t,left,width)=>{const top=y(b.s),hh=Math.max(15,(b.e-b.s)*PX-2),xs=hh<40,n=b._n,c=b._col;const past=isT&&b.e<=t;
-  return`<div class="ev${xs?' xs':''}${past?' past':''}${n>1?' ovl':''}" data-c="${b.cat}" style="top:${top}px;height:${hh}px;left:calc(${left} + (${width}) * ${c}/${n});width:calc((${width}) / ${n} - 3px)" title="${esc(b.label)} · ${clock(b.s)}–${clock(b.e)}">
+const evHTML=(b,y,PX,isT,t,left,width)=>{const top=y(b.s),hh=Math.max(10,(b.e-b.s)*PX-2),xs=hh<40,xxs=hh<24,n=b._n,c=b._col;const past=isT&&b.e<=t;
+  return`<div class="ev${xs?' xs':''}${xxs?' xxs':''}${past?' past':''}${n>1?' ovl':''}" data-c="${b.cat}" style="top:${top}px;height:${hh}px;left:calc(${left} + (${width}) * ${c}/${n});width:calc((${width}) / ${n} - 3px)" title="${esc(b.label)} · ${clock(b.s)}–${clock(b.e)}">
     <span class="tt">${esc(n>2&&b.short?b.short:b.label)}${b.cat==='pausa'?` · ${hm(b.e-b.s)}`:''}</span>${b.cat==='pausa'?'':`<span class="tm">${clock(b.s)} – ${clock(b.e)}</span>`}${!xs&&hh>=62&&b.note?`<span class="nt">${esc(b.note)}</span>`:''}</div>`};
 function grid(P,d){
   const PX=1.15,isT=sameDay(d,now),t=nmin();
@@ -395,9 +409,7 @@ function viewSem(){
     <div class="wk"><div></div>${hd}<div class="ax" style="height:${H}px">${ax}</div>${cl}</div>
     <div class="legend">${['clase','trabajo','estudio','deporte','comida','libre','hobby','trayecto','viaje'].map(c=>`<span data-c="${c}">${CATN[c]}</span>`).join('')}</div>
     <section class="card"><div class="stats">
-      <div data-c="clase"><b>${hm(tot.clase||0)}</b><span>de clase</span></div><div data-c="trabajo"><b>${hm(tot.trabajo||0)}</b><span>de trabajo</span></div>
-      <div data-c="estudio"><b>${hm(tot.estudio||0)}</b><span>de estudio</span></div><div data-c="deporte"><b>${hm(tot.deporte||0)}</b><span>de deporte</span></div>
-      <div data-c="hobby"><b>${hm(tot.hobby||0)}</b><span>de hobbies</span></div><div data-c="sueno"><b>${hm(Math.min(...nights))}</b><span>de sueño mínimo entre semana</span></div></div></section>
+      ${[['clase','de clase'],['trabajo','de trabajo'],['estudio','de estudio'],['deporte','de deporte'],['hobby','de hobbies']].filter(([k])=>tot[k]>0).map(([k,l])=>`<div data-c="${k}"><b>${hm(tot[k])}</b><span>${l}</span></div>`).join('')}<div data-c="sueno"><b>${hm(Math.min(...nights))}</b><span>de sueño mínimo entre semana</span></div></div></section>
     ${chg.length?`<section class="card"><h3 style="margin:0;font-size:17px">Cambios de esta semana</h3><ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:8px;font-size:15px">${chg.join('')}</ul></section>`:''}`;
 }
 function viewAgenda(){
@@ -549,6 +561,7 @@ document.addEventListener('input',e=>{
   setP(ob.d,p,el.value);
   if(p==='teamup'){const st=$('#tuSt');if(st)st.innerHTML=tuStatus(el.value)}
   if(/\.(ca|town)$/.test(p)){const f=$('#festN');if(f)f.innerHTML=festNote(ob.d)}
+  if(/^(home|place)\.town$/.test(p)){const w=p.split('.')[0];loadMuni().then(()=>acRender(w))}
   if(p==='opos.tipo'){const O=ob.d.opos;if(!O.edited)O.sessions=oposSessions(O.tipo);if(!O.edited||!O.train.length)O.train=oposTrain(O.tipo);renderOB();return}
   if(/^opos\.(sessions|train)\./.test(p))ob.d.opos.edited=true;
   const st=STEPS[ob.step];if(st.ok)$('#obNext').disabled=!st.ok(ob.d);
@@ -590,6 +603,11 @@ document.addEventListener('click',async e=>{
       if(t.dataset.seg==='place.same'&&!v&&!ob.d.place.town)ob.d.place.ca=ob.d.home.ca;
       return renderOB()}
     if(t.dataset.stp){const p=t.dataset.stp,v=Number(getP(ob.d,p))+Number(t.dataset.d);setP(ob.d,p,Math.min(Number(t.dataset.max),Math.max(Number(t.dataset.min),Math.round(v*100)/100)));return renderOB()}
+    if(t.dataset.acpick){const w=t.dataset.acpick;ob.d[w].town=t.dataset.v;ob.d[w].ca=t.dataset.ca;return renderOB()}
+    if(t.hasAttribute('data-addwe')){const l=ob.d.weekend.slice(-1)[0];ob.d.weekend.push({id:'w'+Date.now(),label:'Estudio',cat:'estudio',start:l?l.end:'10:00',end:l?clock(T(l.end)+120):'13:00',days:[5,6]});return renderOB()}
+    if(t.dataset.delwe!==undefined){ob.d.weekend.splice(+t.dataset.delwe,1);return renderOB()}
+    if(t.hasAttribute('data-addpk')){ob.d.gym.peaks.push(['07:30','09:00']);return renderOB()}
+    if(t.dataset.delpk!==undefined){ob.d.gym.peaks.splice(+t.dataset.delpk,1);return renderOB()}
     if(t.dataset.icsgrp){const n=t.dataset.icsgrp,g=t.dataset.g,G=ob.d.icsGroup=ob.d.icsGroup||{};G[n]=G[n]===g?'':g;return renderOB()}
     if(t.dataset.icssel){const k=t.dataset.icssel,s=new Set(ob.d.icsSel);s.has(k)?s.delete(k):s.add(k);ob.d.icsSel=[...s];return renderOB()}
     if(t.dataset.subj||t.dataset.icssel){const isI=!!t.dataset.icssel,k=isI?t.dataset.icssel:t.dataset.subj,arr=isI?'icsSel':'subjects',s=new Set(ob.d[arr]);s.has(k)?s.delete(k):s.add(k);ob.d[arr]=[...s];t.setAttribute('aria-checked',s.has(k));const det=t.closest('details'),n=det.querySelectorAll('[aria-checked="true"]').length,tot=det.querySelectorAll('.subj').length;det.querySelector('.n').textContent=n?`${n} de ${tot}`:`${tot} asignaturas`;return}
@@ -645,7 +663,7 @@ let tx=null,ty=null;
 document.addEventListener('touchstart',e=>{if(ob||view.tab!=='hoy'||cols()>1||!e.target.closest('#tg'))return;tx=e.touches[0].clientX;ty=e.touches[0].clientY},{passive:true});
 document.addEventListener('touchend',e=>{if(tx===null)return;const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;tx=null;if(Math.abs(dx)>60&&Math.abs(dy)<45){view.sel=addDays(view.sel,dx<0?1:-1);render()}},{passive:true});
 document.addEventListener('keydown',e=>{if(ob||view.tab!=='hoy'||e.target.matches('input,select,textarea'))return;if(e.key==='ArrowRight'){view.sel=addDays(view.sel,1);render()}if(e.key==='ArrowLeft'){view.sel=addDays(view.sel,-1);render()}});
-let lastCols=null;window.addEventListener('resize',()=>{const c=cols();if(c!==lastCols&&!ob&&cfg){lastCols=c;render()}});
+const layoutKey=()=>cols()+'|'+(spanOpts()||[]).join(',');let lastCols=null;window.addEventListener('resize',()=>{const c=layoutKey();if(c!==lastCols&&!ob&&cfg){lastCols=c;render()}});
 mqDark.addEventListener&&mqDark.addEventListener('change',applyTheme);
 const tick=()=>{const was=sameDay(view.sel,now);now=new Date();if(was)view.sel=sod(now);applyTheme();checkAlerts();if(!ob&&cfg&&$('#sheet').hidden&&!document.activeElement.matches('input,select,textarea'))render()};
 setInterval(tick,30000);document.addEventListener('visibilitychange',()=>{if(!document.hidden){tick();Store.pull().catch(()=>{})}});
@@ -657,5 +675,5 @@ setInterval(tick,30000);document.addEventListener('visibilitychange',()=>{if(!do
   if(c){cfg=normCfg(c);await loadCat(teamupId(cfg.teamup))}
   else await loadCatalog((CALS[0]||{}).id);
   Store.watchNotes(a=>{notes=a;rebuild();if(!ob&&cfg)render()});
-  lastCols=cols();render(true);checkAlerts();
+  lastCols=layoutKey();render(true);checkAlerts();
 })();
