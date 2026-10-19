@@ -47,6 +47,7 @@ const Store={mode:'local',sb:null,user:null,cb:null,
   async init(){const C=window.RITMO_CONFIG||{};if(!C.supabaseUrl||!C.supabaseKey)return;
     try{await loadScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js');
       this.sb=window.supabase.createClient(C.supabaseUrl,C.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true}});
+      this.sb.auth.onAuthStateChange(async ev=>{if(ev==='PASSWORD_RECOVERY'){const pw=window.prompt('Escribe tu nueva contraseña (mínimo 6 caracteres)');if(pw&&pw.length>=6){const {error}=await this.sb.auth.updateUser({password:pw});toast(error?'No se ha podido cambiar':'Contraseña cambiada')}}});
       const {data}=await this.sb.auth.getSession();if(data&&data.session){this.user=data.session.user;this.mode='cloud'}}catch(e){this.sb=null}},
   get uid(){return this.user&&this.user.id},
   async loadCfg(){const l=LS.get('ritmo-cfg',null);if(this.mode!=='cloud')return l;
@@ -60,11 +61,13 @@ const Store={mode:'local',sb:null,user:null,cb:null,
   async addNote(n){if(this.mode==='cloud'){const {error}=await this.sb.from('notas').insert({...n,alert:n.alert===''?null:n.alert,user_id:this.uid});if(error)throw error;return this.pull()}this.emit([...this.local(),{id:'n'+Date.now(),...n}])},
   async updNote(id,p){if(this.mode==='cloud'){const {error}=await this.sb.from('notas').update(p).eq('id',id);if(error)throw error;return this.pull()}this.emit(this.local().map(n=>n.id===id?{...n,...p}:n))},
   async delNote(id){if(this.mode==='cloud'){const {error}=await this.sb.from('notas').delete().eq('id',id);if(error)throw error;return this.pull()}this.emit(this.local().filter(n=>n.id!==id))},
-  async sendCode(email){const {error}=await this.sb.auth.signInWithOtp({email,options:{shouldCreateUser:true}});if(error)throw error},
-  async verify(email,token){const {data,error}=await this.sb.auth.verifyOtp({email,token,type:'email'});if(error)throw error;this.user=data.user;this.mode='cloud';
+  async login(email,password,create){
+    const {data,error}=create?await this.sb.auth.signUp({email,password}):await this.sb.auth.signInWithPassword({email,password});if(error)throw error;
+    if(!data.session)throw new Error('confirm');this.user=data.session.user;this.mode='cloud';
     const loc=this.local().filter(n=>String(n.id).startsWith('n'));
     if(loc.length)await this.sb.from('notas').insert(loc.map(({id,...n})=>({...n,alert:n.alert===''||n.alert==null?null:n.alert,user_id:this.uid})));
     const c=await this.loadCfg();if(c){cfg=normCfg(c);await loadCat(teamupId(cfg.teamup));rebuild()}await this.pull()},
+  async resetPw(email){const {error}=await this.sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});if(error)throw error},
   async signOut(){if(this.sb)await this.sb.auth.signOut();this.user=null;this.mode='local'},
   async reset(){if(this.mode==='cloud'){await this.sb.from('notas').delete().eq('user_id',this.uid);await this.sb.from('perfiles').delete().eq('user_id',this.uid)}LS.del('ritmo-cfg');LS.del('ritmo-notas');notes=[]}
 };
@@ -513,13 +516,16 @@ function calEvents(only){
     for(let i=0;i<180;i++){const d=addDays(sod(now),i);if(E.plan(d).b.some(b=>b.evId===ev.id))evs.push({uid:`reunion-${ev.id}-${ymd(d)}`,date:ymd(d),start:ev.start,end:ev.end,title:ev.label,alert:ev.notify})}}
   return evs;
 }
-let syncStep={email:'',sent:false,busy:false,err:''};
+let syncStep={email:'',create:false,busy:false,err:'',ok:''};
 function syncGroup(){
   if(!Store.sb)return grp('Sincronización',`<div class="row"><span class="lab">Solo en este dispositivo<small>Para verlo también en otros dispositivos hay que conectar Supabase (README del repositorio).</small></span></div>`);
   if(Store.mode==='cloud')return grp('Sincronización',`<div class="row"><span class="lab">Conectado<small>${esc(Store.user.email||'')}</small></span><button class="pillb icb" data-act="signout">Salir</button></div>`,'Tus cambios se guardan en tu cuenta y aparecen en todos tus dispositivos.');
-  return grp('Sincronizar entre dispositivos',`<div class="row"><input type="email" id="syEmail" placeholder="tu@email.com" value="${esc(syncStep.email)}" autocomplete="email" aria-label="Email"></div>
-    ${syncStep.sent?`<div class="row"><input type="text" id="syCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Código del email" aria-label="Código"></div>`:''}
-    <button class="addrow" data-act="${syncStep.sent?'sycode':'symail'}"${syncStep.busy?' disabled':''}>${syncStep.sent?'Entrar':'Enviarme un código'}</button>`,syncStep.err?`<span style="color:var(--c-examen)">${esc(syncStep.err)}</span>`:'Te llega un código al email. Úsalo en cada dispositivo para tener lo mismo en todos.');
+  const c=syncStep.create;
+  return grp('Sincronizar entre dispositivos',`<div class="row">${seg('x',[[false,'Ya tengo cuenta'],[true,'Crear cuenta']],c,true).replace(/data-seg="x"/g,'data-sycreate')}</div>
+    <div class="row"><input type="email" id="syEmail" placeholder="tu@email.com" value="${esc(syncStep.email)}" autocomplete="email" aria-label="Email"></div>
+    <div class="row"><input type="password" id="syPw" placeholder="${c?'Elige una contraseña (mín. 6)':'Contraseña'}" autocomplete="${c?'new-password':'current-password'}" aria-label="Contraseña" style="flex:1;min-width:0;border:0;background:none;padding:6px 0;font-size:17px"></div>
+    <button class="addrow" data-act="sylogin"${syncStep.busy?' disabled':''}>${c?'Crear cuenta y sincronizar':'Entrar'}</button>${c?'':`<button class="addrow" data-act="syforgot" style="font-size:14px;padding-top:0">He olvidado la contraseña</button>`}`,
+    syncStep.err?`<span style="color:var(--c-examen)">${esc(syncStep.err)}</span>`:syncStep.ok?esc(syncStep.ok):'Con la misma cuenta en el móvil, la tablet y el ordenador tienes lo mismo en todos.');
 }
 function render(top){
   applyTheme();
@@ -644,10 +650,15 @@ document.addEventListener('click',async e=>{
   if(a==='icsall'){const evs=calEvents();if(!evs.length){toast('No hay nada con aviso todavía');return}await shareICS('ritmo-avisos.ics',buildICS(evs));return}
   if(t.dataset.cal){const evs=calEvents(t.dataset.cal);if(evs.length)await shareICS('ritmo.ics',buildICS(evs));return}
   if(a==='wios'){const box=$('#wiosBox'),ta=$('#wiosTxt'),s=widgetScript();ta.value=s;box.hidden=false;try{await navigator.clipboard.writeText(s);toast('Script copiado')}catch(err){ta.select();toast('Selecciona el texto y cópialo')}return}
-  if(a==='symail'){const em=($('#syEmail').value||'').trim();if(!/^\S+@\S+\.\S+$/.test(em)){syncStep.err='Escribe un email válido.';render();return}
-    syncStep={email:em,sent:false,busy:true,err:''};render();try{await Store.sendCode(em);syncStep.sent=true}catch(err){syncStep.err='No se ha podido enviar el código. Inténtalo otra vez.'}syncStep.busy=false;render();return}
-  if(a==='sycode'){const code=($('#syCode').value||'').trim();if(code.length<6){syncStep.err='Escribe el código del email.';render();return}
-    syncStep.busy=true;syncStep.err='';render();try{await Store.verify(syncStep.email,code);syncStep={email:'',sent:false,busy:false,err:''};toast('Sincronizado');render()}catch(err){syncStep.busy=false;syncStep.err='Código incorrecto o caducado.';render()}return}
+  if(t.hasAttribute('data-sycreate')){syncStep.create=JSON.parse(t.dataset.v);syncStep.email=($('#syEmail')||{}).value||syncStep.email;syncStep.err='';render();return}
+  if(a==='sylogin'||a==='syforgot'){const em=($('#syEmail').value||'').trim(),pw=($('#syPw')||{}).value||'';syncStep.email=em;
+    if(!/^\S+@\S+\.\S+$/.test(em)){syncStep.err='Escribe un email válido.';render();return}
+    if(a==='syforgot'){try{await Store.resetPw(em);syncStep.err='';syncStep.ok='Te he mandado un email para cambiar la contraseña.'}catch(e){syncStep.err='No se ha podido enviar el email.'}render();return}
+    if(pw.length<6){syncStep.err='La contraseña tiene que tener al menos 6 caracteres.';render();return}
+    syncStep.busy=true;syncStep.err='';render();
+    try{await Store.login(em,pw,syncStep.create);syncStep={email:'',create:false,busy:false,err:'',ok:''};toast('Sincronizado');render()}
+    catch(e){syncStep.busy=false;const m=String(e.message||'');
+      syncStep.err=m==='confirm'?'Cuenta creada. Confirma el email que te ha llegado y luego entra con «Ya tengo cuenta».':/already registered|already exists/i.test(m)?'Ya hay una cuenta con ese email: entra con «Ya tengo cuenta».':/invalid login|credentials/i.test(m)?'Email o contraseña incorrectos.':/not confirmed/i.test(m)?'Falta confirmar el email: abre el enlace que te llegó al crear la cuenta.':'No se ha podido conectar. Inténtalo otra vez.';render()}return}
   if(a==='signout'){await Store.signOut();render();toast('Sesión cerrada');return}
   if(a==='reset'){if(!t.dataset.armed){t.dataset.armed='1';t.querySelector('.lab').textContent='Toca otra vez para borrar todo';setTimeout(()=>{if(t.isConnected){delete t.dataset.armed;t.querySelector('.lab').textContent='Borrar mis datos'}},3500);return}
     await Store.reset();cfg=null;E=null;startOB(0);return}

@@ -44,8 +44,8 @@ Usa [Supabase](https://supabase.com) (plan gratuito):
 
 1. Crea un proyecto.
 2. En **SQL Editor**, ejecuta `supabase/schema.sql`.
-3. En **Authentication → Email Templates → Magic Link**, añade `{{ .Token }}` al texto para que el email traiga un código de 6 cifras.
+3. En **Authentication → Sign In / Providers → Email**, deja activado *Email* y desactiva *Confirm email* (así la cuenta funciona al momento; si lo dejas activado, hay que pulsar el enlace del email una vez).
 4. En **Authentication → URL Configuration**, pon como *Site URL* `https://enriquemb5.github.io/ritmo/`.
 5. En **Project Settings → API**, copia la *Project URL* y la *anon public key* a `config.js`.
 
-Luego, en la app: **Ajustes → Sincronizar entre dispositivos**, escribe tu email y el código que te llega. Haz lo mismo en el móvil y en el ordenador.
+Luego, en la app: **Ajustes → Sincronizar entre dispositivos → Crear cuenta** con tu email y una contraseña. En el resto de dispositivos, **Ya tengo cuenta**.
