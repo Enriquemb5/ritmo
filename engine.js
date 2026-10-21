@@ -36,7 +36,7 @@ const teamupId=url=>{const m=String(url||'').match(/teamup\.com\/(ks[a-z0-9]+)/i
 const DEFAULT_CFG={
   v:1,name:'',teamup:'',course:'4',
   subjects:['4|Gestión Inteligente de Redes Móviles','4|Laboratorio de Redes Móviles con Inteligencia Artificial','4|Laboratorio de Proyectos','4|Inteligencia Artificial para Redes y Servicios','4|Redes y Servicios Virtualizados'],
-  sleepH:7.5,bedWk:'00:00',bedWe:'01:00',wakeWk:'07:00',wakeWe:'08:30',morning:60,
+  sleepH:7.5,sleepWeOn:false,sleepHWe:8.5,bedWk:'00:00',bedWe:'01:00',wakeWk:'07:00',wakeWe:'08:30',morning:60,
   commute:{normal:40,rush:50},rush:[['07:30','09:30'],['13:30','15:30'],['17:30','19:30']],
   leave:['08:40','09:30','09:30','09:30','auto'],
   work:{on:true,place:'uni',label:'Trabajo',min:[210,210,210,210,60],after:[false,false,false,false,true]},
@@ -139,7 +139,8 @@ function Engine(cfg,agenda=[]){
   /* hora de dormir: las horas de sueño antes de levantarte, pero nunca más tarde de tu hora tope
      (entre semana y las noches de viernes y sábado tienen su propio tope) */
   const bedOf=(d,nextWake)=>{const we=dow(addDays(d,1))>=5,cap=T((we?C.bedWe:C.bedWk)||(we?'01:00':'00:00'));
-    return Math.min(nextWake+1440-Math.round(C.sleepH*60),cap<720?cap+1440:cap)};
+    const h=we&&C.sleepWeOn?(C.sleepHWe||C.sleepH):C.sleepH;
+    return Math.min(nextWake+1440-Math.round(h*60),cap<720?cap+1440:cap)};
   /* horas punta del gimnasio (si prefieres evitarlas) */
   const peaks=()=>C.gym&&C.gym.avoid!=='igual'?(C.gym.peaks||[]).filter(p=>p[0]&&p[1]).map(([a,b])=>[T(a),T(b)]):[];
   const inPeak=(s,e)=>peaks().some(([a,b])=>s<b&&e>a);
