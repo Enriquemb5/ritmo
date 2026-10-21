@@ -36,7 +36,7 @@ const teamupId=url=>{const m=String(url||'').match(/teamup\.com\/(ks[a-z0-9]+)/i
 const DEFAULT_CFG={
   v:1,name:'',teamup:'',course:'4',
   subjects:['4|Gestión Inteligente de Redes Móviles','4|Laboratorio de Redes Móviles con Inteligencia Artificial','4|Laboratorio de Proyectos','4|Inteligencia Artificial para Redes y Servicios','4|Redes y Servicios Virtualizados'],
-  sleepH:7.5,wakeWk:'07:00',wakeWe:'08:30',morning:60,
+  sleepH:7.5,bedWk:'00:00',bedWe:'01:00',wakeWk:'07:00',wakeWe:'08:30',morning:60,
   commute:{normal:40,rush:50},rush:[['07:30','09:30'],['13:30','15:30'],['17:30','19:30']],
   leave:['08:40','09:30','09:30','09:30','auto'],
   work:{on:true,place:'uni',label:'Trabajo',min:[210,210,210,210,60],after:[false,false,false,false,true]},
@@ -136,6 +136,10 @@ function Engine(cfg,agenda=[]){
     return hcache[k]=m?{name:m.text||'Festivo',scope:'manual'}:officialHoliday(k,place.ca,place.town)};
   const homeHoliday=d=>{if(!C.place||C.place.same||!C.home)return null;return holidayOf(d)?null:officialHoliday(ymd(d),C.home.ca,C.home.town)};
   const opos=C.profile==='opos';
+  /* hora de dormir: las horas de sueño antes de levantarte, pero nunca más tarde de tu hora tope
+     (entre semana y las noches de viernes y sábado tienen su propio tope) */
+  const bedOf=(d,nextWake)=>{const we=dow(addDays(d,1))>=5,cap=T((we?C.bedWe:C.bedWk)||(we?'01:00':'00:00'));
+    return Math.min(nextWake+1440-Math.round(C.sleepH*60),cap<720?cap+1440:cap)};
   /* horas punta del gimnasio (si prefieres evitarlas) */
   const peaks=()=>C.gym&&C.gym.avoid!=='igual'?(C.gym.peaks||[]).filter(p=>p[0]&&p[1]).map(([a,b])=>[T(a),T(b)]):[];
   const inPeak=(s,e)=>peaks().some(([a,b])=>s<b&&e>a);
@@ -255,7 +259,7 @@ function Engine(cfg,agenda=[]){
   /* día de quien prepara oposiciones: estudio por bloques, academia y simulacros */
   function oposDay(d,M){
     const i=dow(d),O=C.opos,warn=[],blocks=[],hol=holidayOf(d);
-    const nextWake=morningOf(addDays(d,1)).wake;const S=nextWake+1440-Math.round(C.sleepH*60);
+    const nextWake=morningOf(addDays(d,1)).wake;const S=bedOf(d,nextWake);
     if(hol)warn.push(`Festivo: ${hol.name}. ${C.custom.length?'No hay academia y hoy':'Hoy'} estudias como un sábado.`);
     let t=M.wake;blocks.push(B(t,t+C.morning,'rutina',i>=5?'Despertar y desayuno sin prisa':'Despertar, ducha y desayuno'));t+=C.morning;
     const cls=classes(d),evs=events(d),occ=[...cls,...evs];
@@ -300,7 +304,7 @@ function Engine(cfg,agenda=[]){
     const i=dow(d),warn=[],k=ymd(d);
     const M=morningOf(d);
     const nextWake=morningOf(addDays(d,1)).wake;
-    let S=nextWake+1440-Math.round(C.sleepH*60);
+    let S=bedOf(d,nextWake);
     const blocks=[];
     let H; // llegada a casa
     const trip=tripOn(d);
@@ -474,7 +478,7 @@ function Engine(cfg,agenda=[]){
       // rehace la tarde con series
       const pre=P.b.filter(b=>b.e<=P.H||(b.fixed&&b.s<P.H));
       const nextWake=morningOf(addDays(d,1)).wake;
-      P=evening(d,{blocks:pre,H:P.H,S:nextWake+1440-Math.round(C.sleepH*60),warn:[...P.warn],series:true,home:P.home,weekend:P.weekend});
+      P=evening(d,{blocks:pre,H:P.H,S:bedOf(d,nextWake),warn:[...P.warn],series:true,home:P.home,weekend:P.weekend});
       P.series=true;
     }
     P.date=d;P.parity=parity(d);P.src=opos?'opos':usesTeamup&&inRange(d)?'teamup':C.source==='propio'?'propio':'tipo';P.trip=tripOn(d)||null;P.hol=holidayOf(d);P.holHome=homeHoliday(d);
